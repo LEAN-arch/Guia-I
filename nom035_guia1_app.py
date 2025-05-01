@@ -39,7 +39,7 @@ LANGUAGES = {
         "password_prompt": "Ingrese la contraseña:",
         "incorrect_password": "Contraseña incorrecta",
         "progress": "Progreso",
-        "yes": "Sí",
+        "yes": "Si",
         "no": "No",
         "always": "Siempre",
         "almost_always": "Casi siempre",
