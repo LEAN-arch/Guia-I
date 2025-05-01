@@ -15,10 +15,13 @@ import time
 import logging
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
-ACCESS_KEY = os.getenv("NOM035")
-RESET_PASSWORD = os.getenv("NOM035RESET")
+# Validate environment variables
+if not ACCESS_KEY or len(ACCESS_KEY) < 8:
+    logger.warning("NOM035_ACCESS_KEY is missing or too short. Using fallback.")
+    ACCESS_KEY = "NOM035_ACCESS_2025"
+if not RESET_PASSWORD or len(RESET_PASSWORD) < 8:
+    logger.warning("NOM035_RESET_PASSWORD is missing or too short. Using fallback.")
+    RESET_PASSWORD = "RESET_NOM035_2025"
 
 # Configure logging
 logging.basicConfig(
