@@ -1254,7 +1254,7 @@ elif section == "📥 Descargar Reporte":
                         gender_risk_iv = pd.DataFrame(guia_iv_analysis['Riesgo Salud por Género (Guía IV)'])
                         ws_stats.cell(row, 1).value = "Género"
                         for c, col in enumerate(gender_risk_iv.columns, start=2):
-ws_stats.cell(row, c).value = col
+                    ws_stats.cell(row, c).value = col
                         row += 1
                         for r, idx in enumerate(gender_risk_iv.index, start=row):
                             ws_stats.cell(r, 1).value = idx
