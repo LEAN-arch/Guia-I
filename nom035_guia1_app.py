@@ -4,7 +4,14 @@ from datetime import datetime
 import hashlib
 import base64
 import secrets
-import re
+import os
+import time
+
+# Load environment variables for security
+from dotenv import load_dotenv
+load_dotenv()
+PASSWORD = os.getenv("SURVEY_PASSWORD", "securepassword123")  # Fallback for testing
+SALT = os.getenv("SURVEY_SALT", secrets.token_hex(16))
 
 # Language selector and translations
 LANGUAGES = {
@@ -37,7 +44,8 @@ LANGUAGES = {
         "affectation": "Afectación (durante el último mes):",
         "validation_error": "Por favor complete todos los campos requeridos correctamente.",
         "invalid_age": "La edad debe ser un número entre 18 y 100.",
-        "invalid_years_worked": "Los años trabajados deben ser un número entre 0 y la edad ingresada."
+        "invalid_years_worked": "Los años trabajados deben ser un número entre 0 y la edad ingresada.",
+        "please_wait": "Por favor espere, procesando..."
     },
     "en": {
         "title": "NOM-035-STPS-2018 Survey",
@@ -68,7 +76,8 @@ LANGUAGES = {
         "affectation": "Affectation (during the last month):",
         "validation_error": "Please complete all required fields correctly.",
         "invalid_age": "Age must be a number between 18 and 100.",
-        "invalid_years_worked": "Years worked must be a number between 0 and the entered age."
+        "invalid_years_worked": "Years worked must be a number between 0 and the entered age.",
+        "please_wait": "Please wait, processing..."
     }
 }
 
@@ -123,7 +132,7 @@ GUIDE2_QUESTIONS = [
     {"id": "g2_q12", "text": "Puedo decidir la cantidad de trabajo que realizo durante la jornada laboral.", "text_en": "I can decide the amount of work I do during the workday."},
     {"id": "g2_q13", "text": "Tengo libertad para decidir cómo realizar mi trabajo.", "text_en": "I have the freedom to decide how to perform my job."},
     {"id": "g2_q14", "text": "Mi trabajo requiere que tome decisiones difíciles.", "text_en": "My job requires me to make difficult decisions."},
-    {"id": "g2_q15", "text": "Tengo que atender varias tareas al mismo tiempo en mi trabajo.", "text_en": "I have to handle multiple tasks at the same time in my job."},
+    {"id": "g2_q15", "text": "Tengo que atender varias tareas al mismo tiempo en mi trabajo.", "text_en": " Multilingualism I have to handle multiple tasks at the same time in my job."},
     {"id": "g2_q16", "text": "Mi trabajo requiere un alto nivel de concentración.", "text_en": "My job requires a high level of concentration."},
     {"id": "g2_q17", "text": "La cantidad de trabajo que tengo que hacer es excesiva.", "text_en": "The amount of work I have to do is excessive."},
     {"id": "g2_q18", "text": "Tengo que trabajar horas extras con frecuencia.", "text_en": "I have to work overtime frequently."},
@@ -142,7 +151,7 @@ GUIDE2_QUESTIONS = [
     {"id": "g2_q31", "text": "Siento que mis compañeros me excluyen o ignoran.", "text_en": "I feel that my colleagues exclude or ignore me."},
     {"id": "g2_q32", "text": "En mi trabajo he sido víctima de burlas o bromas pesadas.", "text_en": "At work, I have been a victim of teasing or heavy-handed jokes."},
     {"id": "g2_q33", "text": "He sido testigo o víctima de discriminación en mi lugar de trabajo.", "text_en": "I have witnessed or been a victim of discrimination in my workplace."},
-    {"id":劝": "g2_q34", "text": "Mi trabajo interfiere con mis responsabilidades familiares.", "text_en": "My job interferes with my family responsibilities."},
+    {"id": "g2_q34", "text": "Mi trabajo interfiere con mis responsabilidades familiares.", "text_en": "My job interferes with my family responsibilities."},
     {"id": "g2_q35", "text": "Siento que mi trabajo afecta negativamente mi vida personal.", "text_en": "I feel that my job negatively affects my personal life."},
     {"id": "g2_q36", "text": "Tengo tiempo suficiente para realizar mis actividades personales fuera del trabajo.", "text_en": "I have enough time to carry out my personal activities outside of work."},
     {"id": "g2_q37", "text": "Mi horario de trabajo es flexible.", "text_en": "My work schedule is flexible."},
@@ -188,16 +197,13 @@ GUIDE3_QUESTIONS = [
 ]
 
 # Password hashing with salt
-def hash_password(password, salt=None):
-    if salt is None:
-        salt = secrets.token_hex(16)
+def hash_password(password, salt):
     salted_password = password + salt
     hashed = hashlib.sha256(salted_password.encode()).hexdigest()
-    return hashed, salt
+    return hashed
 
-# Predefined hashed password and salt (replace with your own)
-PASSWORD = "securepassword123"  # Change in production
-CORRECT_PASSWORD_HASH, SALT = hash_password(PASSWORD)
+# Predefined hashed password
+CORRECT_PASSWORD_HASH = hash_password(PASSWORD, SALT)
 
 # Initialize session state
 if "responses" not in st.session_state:
@@ -210,6 +216,12 @@ if "guide3_complete" not in st.session_state:
     st.session_state.guide3_complete = False
 if "has_trauma" not in st.session_state:
     st.session_state.has_trauma = False
+if "last_action_time" not in st.session_state:
+    st.session_state.last_action_time = 0
+if "guide2_page" not in st.session_state:
+    st.session_state.guide2_page = 0
+if "guide3_page" not in st.session_state:
+    st.session_state.guide3_page = 0
 
 # Streamlit app configuration
 st.set_page_config(page_title="NOM-035 Survey", layout="wide")
@@ -222,9 +234,11 @@ st.markdown("""
     .tooltip {color: #555; font-size: 14px;}
     .section-header {font-size: 20px; font-weight: bold; margin-top: 20px;}
     .stTextInput, .stSelectbox, .stRadio {margin-bottom: 20px;}
+    .stRadio > div {flex-direction: row; flex-wrap: wrap;}
     @media (max-width: 600px) {
         .question {font-size: 16px;}
         .section-header {font-size: 18px;}
+        .stRadio > div {flex-direction: column;}
     }
     </style>
 """, unsafe_allow_html=True)
@@ -235,25 +249,56 @@ lang_code = "es" if lang == "Español" else "en"
 t = LANGUAGES[lang_code]
 
 # Reset responses
-def reset_responses():
-    st.session_state.responses = {}
-    st.session_state.guide1_complete = False
-    st.session_state.guide2_complete = False
-    st.session_state.guide3_complete = False
-    st.session_state.has_trauma = False
+def reset_responses(guide=None):
+    if guide == "guide1":
+        st.session_state.responses = {k: v for k, v in st.session_state.responses.items() if not k.startswith("g1_")}
+        st.session_state.guide1_complete = False
+        st.session_state.has_trauma = False
+    elif guide == "guide2":
+        st.session_state.responses = {k: v for k, v in st.session_state.responses.items() if not k.startswith("g2_")}
+        st.session_state.guide2_complete = False
+        st.session_state.guide2_page = 0
+    elif guide == "guide3":
+        st.session_state.responses = {k: v for k, v in st.session_state.responses.items() if not k.startswith("g3_")}
+        st.session_state.guide3_complete = False
+        st.session_state.guide3_page = 0
+    else:
+        st.session_state.responses = {}
+        st.session_state.guide1_complete = False
+        st.session_state.guide2_complete = False
+        st.session_state.guide3_complete = False
+        st.session_state.has_trauma = False
+        st.session_state.guide2_page = 0
+        st.session_state.guide3_page = 0
 
-# Main app
-st.title(t["title"])
-st.write(t["welcome"])
+# Action lock to prevent rapid clicks
+def action_lock():
+    current_time = time.time()
+    if current_time - st.session_state.last_action_time < 1:  # 1-second debounce
+        st.warning(t["please_wait"])
+        return False
+    st.session_state.last_action_time = current_time
+    return True
 
-# Progress bar
-total_questions = len(GUIDE1_QUESTIONS) + 2  # +2 for name subfields (3 total - 1 for the group)
-if st.session_state.has_trauma:
-    total_questions += len(GUIDE2_QUESTIONS) + len(GUIDE3_QUESTIONS)
-answered_questions = len(st.session_state.responses)
-progress = answered_questions / total_questions if total_questions > 0 else 0
-st.progress(progress)
-st.write(f"{t['progress']}: {int(progress * 100)}%")
+# Progress calculation
+def calculate_progress():
+    total_questions = len(GUIDE1_QUESTIONS) + 2  # +2 for name subfields
+    if st.session_state.has_trauma:
+        total_questions += len(GUIDE2_QUESTIONS) + len(GUIDE3_QUESTIONS)
+    
+    answered_questions = 0
+    required_keys = (
+        [subfield["id"] for q in GUIDE1_QUESTIONS if q["type"] == "text_group" for subfield in q["subfields"]] +
+        [q["id"] for q in GUIDE1_QUESTIONS if q["type"] != "text_group"]
+    )
+    if st.session_state.has_trauma:
+        required_keys += [q["id"] for q in GUIDE2_QUESTIONS] + [q["id"] for q in GUIDE3_QUESTIONS]
+    
+    for key in required_keys:
+        if key in st.session_state.responses and st.session_state.responses[key] not in [None, "", 0]:
+            answered_questions += 1
+    
+    return answered_questions / total_questions if total_questions > 0 else 0
 
 # Input validation
 def validate_responses(responses, guide_questions, is_guide1=False):
@@ -278,10 +323,25 @@ def validate_responses(responses, guide_questions, is_guide1=False):
     if is_guide1:
         required_keys += [subfield["id"] for q in guide_questions if q["type"] == "text_group" for subfield in q["subfields"]]
     for key in required_keys:
-        if key not in responses or responses[key] is None:
+        if key not in responses or responses[key] is None or (isinstance(responses[key], str) and not responses[key].strip()):
             errors.append(t["validation_error"])
     
     return errors
+
+# Pagination helper
+def paginate_questions(questions, page, questions_per_page=10):
+    start = page * questions_per_page
+    end = start + questions_per_page
+    return questions[start:end]
+
+# Main app
+st.title(t["title"])
+st.write(t["welcome"])
+
+# Progress bar
+progress = calculate_progress()
+st.progress(progress)
+st.write(f"{t['progress']}: {int(progress * 100)}%")
 
 # Guía I: Acontecimientos Traumáticos Severos
 if not st.session_state.guide1_complete:
@@ -320,7 +380,8 @@ if not st.session_state.guide1_complete:
         st.markdown(f"<p class='question' role='heading' aria-label='Question'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
         response = st.radio(
             "", [t["yes"], t["no"]], key=q["id"], 
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            format_func=lambda x: f"{x} (aria-label='{q['text' if lang_code == 'es' else 'text_en']} - {x}')"
         )
         st.session_state.responses[q["id"]] = response
         if response == t["yes"]:
@@ -332,7 +393,8 @@ if not st.session_state.guide1_complete:
         st.markdown(f"<p class='question' role='heading' aria-label='Question'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
         response = st.radio(
             "", [t["yes"], t["no"]], key=q["id"], 
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            format_func=lambda x: f"{x} (aria-label='{q['text' if lang_code == 'es' else 'text_en']} - {x}')"
         )
         st.session_state.responses[q["id"]] = response
         if response == t["yes"]:
@@ -344,7 +406,8 @@ if not st.session_state.guide1_complete:
         st.markdown(f"<p class='question' role='heading' aria-label='Question'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
         response = st.radio(
             "", [t["yes"], t["no"]], key=q["id"], 
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            format_func=lambda x: f"{x} (aria-label='{q['text' if lang_code == 'es' else 'text_en']} - {x}')"
         )
         st.session_state.responses[q["id"]] = response
         if response == t["yes"]:
@@ -356,7 +419,8 @@ if not st.session_state.guide1_complete:
         st.markdown(f"<p class='question' role='heading' aria-label='Question'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
         response = st.radio(
             "", [t["yes"], t["no"]], key=q["id"], 
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            format_func=lambda x: f"{x} (aria-label='{q['text' if lang_code == 'es' else 'text_en']} - {x}')"
         )
         st.session_state.responses[q["id"]] = response
         if response == t["yes"]:
@@ -366,75 +430,119 @@ if not st.session_state.guide1_complete:
     col1, col2 = st.columns(2)
     with col1:
         if st.button(t["submit"], key="submit_guide1"):
-            errors = validate_responses(st.session_state.responses, GUIDE1_QUESTIONS, is_guide1=True)
-            if errors:
-                for error in errors:
-                    st.error(error)
-            else:
-                st.session_state.guide1_complete = True
-                st.success("Guía I completada / Guide I completed")
+            if action_lock():
+                errors = validate_responses(st.session_state.responses, GUIDE1_QUESTIONS, is_guide1=True)
+                if errors:
+                    for error in errors:
+                        st.error(error)
+                else:
+                    st.session_state.guide1_complete = True
+                    st.success("Guía I completada / Guide I completed")
     with col2:
         if st.button(t["reset"], key="reset_guide1"):
-            reset_responses()
-            st.experimental_rerun()
+            if action_lock():
+                reset_responses("guide1")
+                st.experimental_rerun()
 
 # Guía II: Factores de Riesgo Psicosocial (only if trauma detected)
 if st.session_state.guide1_complete and st.session_state.has_trauma and not st.session_state.guide2_complete:
     st.header(t["guide2"])
     st.markdown(f"<p class='tooltip'>{t['tooltip_guide2']}</p>", unsafe_allow_html=True)
     
-    for q in GUIDE2_QUESTIONS:
+    QUESTIONS_PER_PAGE = 10
+    total_pages = (len(GUIDE2_QUESTIONS) + QUESTIONS_PER_PAGE - 1) // QUESTIONS_PER_PAGE
+    page = st.session_state.guide2_page
+    
+    # Pagination controls
+    col1, col2, col3 = st.columns([1, 3, 1])
+    with col1:
+        if page > 0 and st.button("Anterior / Previous", key="prev_guide2"):
+            st.session_state.guide2_page -= 1
+            st.experimental_rerun()
+    with col3:
+        if page < total_pages - 1 and st.button("Siguiente / Next", key="next_guide2"):
+            st.session_state.guide2_page += 1
+            st.experimental_rerun()
+    
+    # Display questions for current page
+    current_questions = paginate_questions(GUIDE2_QUESTIONS, page, QUESTIONS_PER_PAGE)
+    for q in current_questions:
         st.markdown(f"<p class='question' role='heading' aria-label='Question'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
         response = st.radio(
             "", [t["always"], t["almost_always"], t["sometimes"], t["almost_never"], t["never"]], 
-            key=q["id"], label_visibility="collapsed"
+            key=q["id"], label_visibility="collapsed",
+            format_func=lambda x: f"{x} (aria-label='{q['text' if lang_code == 'es' else 'text_en']} - {x}')"
         )
         st.session_state.responses[q["id"]] = response
     
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button(t["submit"], key="submit_guide2"):
-            errors = validate_responses(st.session_state.responses, GUIDE2_QUESTIONS)
-            if errors:
-                for error in errors:
-                    st.error(error)
-            else:
-                st.session_state.guide2_complete = True
-                st.success("Guía II completada / Guide II completed")
-    with col2:
-        if st.button(t["reset"], key="reset_guide2"):
-            for key in [q["id"] for q in GUIDE2_QUESTIONS]:
-                st.session_state.responses.pop(key, None)
-            st.experimental_rerun()
+    # Submit and Reset Buttons
+    if page == total_pages - 1:  # Show buttons only on last page
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button(t["submit"], key="submit_guide2"):
+                if action_lock():
+                    errors = validate_responses(st.session_state.responses, GUIDE2_QUESTIONS)
+                    if errors:
+                        for error in errors:
+                            st.error(error)
+                    else:
+                        st.session_state.guide2_complete = True
+                        st.success("Guía II completada / Guide II completed")
+        with col2:
+            if st.button(t["reset"], key="reset_guide2"):
+                if action_lock():
+                    reset_responses("guide2")
+                    st.experimental_rerun()
 
 # Guía III: Entorno Organizacional Favorable (only if trauma detected)
 if st.session_state.guide2_complete and st.session_state.has_trauma and not st.session_state.guide3_complete:
     st.header(t["guide3"])
     st.markdown(f"<p class='tooltip'>{t['tooltip_guide3']}</p>", unsafe_allow_html=True)
     
-    for q in GUIDE3_QUESTIONS:
+    QUESTIONS_PER_PAGE = 10
+    total_pages = (len(GUIDE3_QUESTIONS) + QUESTIONS_PER_PAGE - 1) // QUESTIONS_PER_PAGE
+    page = st.session_state.guide3_page
+    
+    # Pagination controls
+    col1, col2, col3 = st.columns([1, 3, 1])
+    with col1:
+        if page > 0 and st.button("Anterior / Previous", key="prev_guide3"):
+            st.session_state.guide3_page -= 1
+            st.experimental_rerun()
+    with col3:
+        if page < total_pages - 1 and st.button("Siguiente / Next", key="next_guide3"):
+            st.session_state.guide3_page += 1
+            st.experimental_rerun()
+    
+    # Display questions for current page
+    current_questions = paginate_questions(GUIDE3_QUESTIONS, page, QUESTIONS_PER_PAGE)
+    for q in current_questions:
         st.markdown(f"<p class='question' role='heading' aria-label='Question'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
         response = st.radio(
             "", [t["always"], t["almost_always"], t["sometimes"], t["almost_never"], t["never"]], 
-            key=q["id"], label_visibility="collapsed"
+            key=q["id"], label_visibility="collapsed",
+            format_func=lambda x: f"{x} (aria-label='{q['text' if lang_code == 'es' else 'text_en']} - {x}')"
         )
         st.session_state.responses[q["id"]] = response
     
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button(t["submit"], key="submit_guide3"):
-            errors = validate_responses(st.session_state.responses, GUIDE3_QUESTIONS)
-            if errors:
-                for error in errors:
-                    st.error(error)
-            else:
-                st.session_state.guide3_complete = True
-                st.success("Guía III completada / Guide III completed")
-    with col2:
-        if st.button(t["reset"], key="reset_guide3"):
-            for key in [q["id"] for q in GUIDE3_QUESTIONS]:
-                st.session_state.responses.pop(key, None)
-            st.experimental_rerun()
+    # Submit and Reset Buttons
+    if page == total_pages - 1:  # Show buttons only on last page
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button(t["submit"], key="submit_guide3"):
+                if action_lock():
+                    errors = validate_responses(st.session_state.responses, GUIDE3_QUESTIONS)
+                    if errors:
+                        for error in errors:
+                            st.error(error)
+                    else:
+                        st.session_state.guide3_complete = True
+                        st.success("Guía III completada / Guide III completed")
+        with col2:
+            if st.button(t["reset"], key="reset_guide3"):
+                if action_lock():
+                    reset_responses("guide3")
+                    st.experimental_rerun()
 
 # Save responses to CSV
 def save_responses():
@@ -449,12 +557,13 @@ if st.session_state.guide1_complete and (not st.session_state.has_trauma or st.s
     st.header(t["download_log"])
     password = st.text_input(t["password_prompt"], type="password", key="download_password")
     if st.button("Descargar / Download", key="download_button"):
-        hashed_input, _ = hash_password(password, SALT)
-        if hashed_input == CORRECT_PASSWORD_HASH:
-            df, timestamp = save_responses()
-            csv = df.to_csv(index=False)
-            b64 = base64.b64encode(csv.encode()).decode()
-            href = f'<a href="data:file/csv;base64,{b64}" download="nom035_responses_{timestamp}.csv" role="button" aria-label="Download CSV">Descargar CSV</a>'
-            st.markdown(href, unsafe_allow_html=True)
-        else:
-            st.error(t["incorrect_password"])
+        if action_lock():
+            hashed_input = hash_password(password, SALT)
+            if hashed_input == CORRECT_PASSWORD_HASH:
+                df, timestamp = save_responses()
+                csv = df.to_csv(index=False)
+                b64 = base64.b64encode(csv.encode()).decode()
+                href = f'<a href="data:file/csv;base64,{b64}" download="nom035_responses_{timestamp}.csv" role="button" aria-label="Download CSV">Descargar CSV</a>'
+                st.markdown(href, unsafe_allow_html=True)
+            else:
+                st.error(t["incorrect_password"])
