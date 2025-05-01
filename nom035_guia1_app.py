@@ -523,11 +523,14 @@ st.markdown(
     """
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
-    body { margin: 0; }
+    html, body, #root, .stApp, .block-container {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
     .main {
         background-color: #F5F7FA;
         font-family: 'Roboto', sans-serif;
-        padding-top: 10px;
+        padding-top: 0;
     }
     .stButton>button {
         background-color: #2E7D32;
@@ -548,9 +551,11 @@ st.markdown(
     .container {
         max-width: 1200px;
         margin: 0 auto;
-        padding: 10px 20px 20px 20px;
+        padding: 5px 20px 20px 20px;
+        margin-top: 0;
         min-height: 100vh;
         box-sizing: border-box;
+        /* border: 1px solid red; */ /* Uncomment for debugging */
     }
     .card {
         background: white;
@@ -563,12 +568,13 @@ st.markdown(
         font-size: 22px;
         font-weight: 700;
         color: #1A237E;
-        margin: 0 0 8px 0;
+        margin: 0 0 5px 0;
+        /* border: 1px solid blue; */ /* Uncomment for debugging */
     }
     .welcome-text {
-        font-size: 16px;
+        font-size: 14px;
         color: #333;
-        margin: 0 0 8px 0;
+        margin: 0 0 5px 0;
     }
     .question {
         font-size: 18px;
@@ -656,16 +662,16 @@ st.markdown(
     }
     @media (max-width: 600px) {
         .container {
-            padding: 5px 10px 10px 10px;
-            margin-top: 0;
+            padding: 2px 10px 10px 10px;
+            margin: 0;
         }
         .header {
-            font-size: 20px;
-            margin: 0 0 6px 0;
+            font-size: 18px;
+            margin: 0 0 4px 0;
         }
         .welcome-text {
-            font-size: 14px;
-            margin: 0 0 6px 0;
+            font-size: 12px;
+            margin: 0 0 4px 0;
         }
         .question {
             font-size: 16px;
@@ -689,9 +695,15 @@ st.markdown(
             const currentPosition = window.scrollY;
             setTimeout(() => window.scrollTo(0, currentPosition), 0);
         }
-        // Debug: Log container HTML to inspect spacing
+        // Debug: Log offsets and styles
         window.addEventListener('load', () => {
-            console.log('Container HTML:', document.querySelector('.container')?.outerHTML);
+            const container = document.querySelector('.container');
+            const stApp = document.querySelector('.stApp');
+            console.log('Container Offset Top:', container?.getBoundingClientRect().top);
+            console.log('stApp Offset Top:', stApp?.getBoundingClientRect().top);
+            console.log('Container Styles:', getComputedStyle(container));
+            console.log('stApp Styles:', getComputedStyle(stApp));
+            console.log('Container HTML:', container?.outerHTML);
         });
     </script>
 """,
@@ -700,7 +712,6 @@ st.markdown(
 
 # Sidebar
 try:
-    st.sidebar.image("assets/FOBO2.png", width=100)
     lang = st.sidebar.selectbox("Language / Idioma", ["Español", "English"], key="language_selector")
     lang_code = "es" if lang == "Español" else "en"
     t = LANGUAGES[lang_code]
@@ -710,7 +721,7 @@ try:
     with st.sidebar:
         st.subheader(t["download_log"])
         password_download = st.text_input(t["password_prompt"], type="password", key="download_password")
-        if st.button(t["download_log"], key="download grunt_button"):
+        if st.button(t["download_log"], key="download_button"):
             if action_lock():
                 try:
                     hashed_input = hash_password(password_download, SALT)
