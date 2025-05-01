@@ -1,3 +1,4 @@
+```python
 import streamlit as st
 import pandas as pd
 import io
@@ -65,6 +66,8 @@ if "guia_ii_responses" not in st.session_state:
     st.session_state.guia_ii_responses = None
 if "response_id" not in st.session_state:
     st.session_state.response_id = None
+if "require_guia_iv" not in st.session_state:
+    st.session_state.require_guia_iv = False
 
 def sanitize_text(text):
     """Sanitize text inputs, limiting length and removing malicious characters."""
@@ -145,6 +148,7 @@ def reset_data(password):
         st.session_state.guia_i_responses = None
         st.session_state.guia_ii_responses = None
         st.session_state.response_id = None
+        st.session_state.require_guia_iv = False
         st.success("✅ Datos reiniciados exitosamente.")
     except PermissionError as e:
         logger.error(f"Permission error: {str(e)}")
@@ -203,7 +207,7 @@ guia_i_questions = [
             ("¿Menor interés en actividades cotidianas?", ["Sí", "No"]),
             ("¿Se siente alejado o distante de los demás?", ["Sí", "No"]),
             ("¿Dificultad para expresar sentimientos?", ["Sí", "No"]),
-            ("¿Sensación de vida corta o futuro limitado?", ["Sí", "No"]),
+            ("¿Sensación dewarning vida corta o futuro limitado?", ["Sí", "No"]),
         ]
     },
     {
@@ -868,10 +872,10 @@ if section == "📋 Evaluación":
                             elif tipo == "number":
                                 respuestas[q] = st.number_input("", min_value=0, step=1, key=f"gi_q{idx}_{q}")
                             elif isinstance(tipo, list):
-                                respuestas[q] = st.radio("", tipo, horizontal=True, key=f"gi_q{idx}_{q}")
-                        except ValueError as e:
-                            st.error(f"❌ Error en {q}: {str(e)}")
-
+                                respuestas[q] = st.radio("", tipo, key=f"gi_q{idx}_{q}")
+                        except ValueError as ve:
+                            st.warning(f"⚠️ {q}: {str(ve)}")
+            
             enviar = st.form_submit_button("✅ Enviar Guía I")
             if enviar:
                 try:
@@ -879,9 +883,11 @@ if section == "📋 Evaluación":
                     is_valid, missing = validate_questions(respuestas, expected_questions)
                     if not is_valid:
                         st.warning(f"⚠️ Responde todas las preguntas antes de enviar. Faltan: {', '.join(missing)}")
-                    elif not validate_number(respuestas.get("¿Qué edad tienes? (ej. 21)")) or not validate_number(respuestas.get("¿Cuántos años llevas trabajando aquí?")):
-                        st.warning("⚠️ Los valores numéricos deben ser enteros mayores o iguales a 0.")
                     else:
+                        for q in ["¿Qué edad tienes? (ej. 21)", "¿Cuántos años llevas trabajando aquí?"]:
+                            if q in respuestas and not validate_number(respuestas[q]):
+                                st.warning(f"⚠️ {q}: Por favor ingrese un número entero mayor o igual a 0.")
+                                return
                         response_id = log_response(respuestas)
                         if response_id:
                             st.session_state.guia_i_responses = respuestas
@@ -928,11 +934,17 @@ if section == "📋 Evaluación":
                             temp_df = pd.DataFrame([respuestas])
                             total_scores, total_risk, _, _ = calculate_risk_score_guia_ii(temp_df, guia_ii_cols, domain_questions_ii)
                             total_risk = total_risk.iloc[0]
-                            if total_risk in ["Insignificante", "Bajo", "Medio"]:
+                            if total_risk in ["Insignificante", "Bajo"]:
                                 st.session_state.current_step = "guia_iii"
+                                st.session_state.require_guia_iv = False
                                 st.success("✅ Guía II enviada. Por favor complete la Guía III.")
+                            elif total_risk == "Medio":
+                                st.session_state.current_step = "guia_iii"
+                                st.session_state.require_guia_iv = True
+                                st.success("✅ Guía II enviada. Por favor complete la Guía III, seguida de la Guía IV.")
                             elif total_risk in ["Alto", "Muy Alto"]:
                                 st.session_state.current_step = "guia_iv"
+                                st.session_state.require_guia_iv = False
                                 st.success("✅ Guía II enviada. Por favor complete la Guía IV.")
                         else:
                             st.error("❌ Error al guardar la respuesta. Intente nuevamente.")
@@ -959,11 +971,16 @@ if section == "📋 Evaluación":
                     else:
                         response_id = log_response(respuestas, st.session_state.response_id)
                         if response_id:
-                            st.session_state.current_step = "guia_i"
-                            st.session_state.guia_i_responses = None
-                            st.session_state.guia_ii_responses = None
-                            st.session_state.response_id = None
-                            st.success("✅ ¡Evaluación Guía I, II y III completada exitosamente!")
+                            if st.session_state.require_guia_iv:
+                                st.session_state.current_step = "guia_iv"
+                                st.success("✅ Guía III enviada. Por favor complete la Guía IV.")
+                            else:
+                                st.session_state.current_step = "guia_i"
+                                st.session_state.guia_i_responses = None
+                                st.session_state.guia_ii_responses = None
+                                st.session_state.response_id = None
+                                st.session_state.require_guia_iv = False
+                                st.success("✅ ¡Evaluación Guía I, II y III completada exitosamente!")
                         else:
                             st.error("❌ Error al guardar la respuesta. Intente nuevamente.")
                 except Exception as e:
@@ -993,6 +1010,7 @@ if section == "📋 Evaluación":
                             st.session_state.guia_i_responses = None
                             st.session_state.guia_ii_responses = None
                             st.session_state.response_id = None
+                            st.session_state.require_guia_iv = False
                             st.success("✅ ¡Evaluación Guía I, II y IV completada exitosamente!")
                         else:
                             st.error("❌ Error al guardar la respuesta. Intente nuevamente.")
@@ -1236,7 +1254,7 @@ elif section == "📥 Descargar Reporte":
                         gender_risk_iv = pd.DataFrame(guia_iv_analysis['Riesgo Salud por Género (Guía IV)'])
                         ws_stats.cell(row, 1).value = "Género"
                         for c, col in enumerate(gender_risk_iv.columns, start=2):
-                            ws_stats.cell(row, c).value = col
+ws_stats.cell(row, c).value = col
                         row += 1
                         for r, idx in enumerate(gender_risk_iv.index, start=row):
                             ws_stats.cell(r, 1).value = idx
@@ -1244,29 +1262,75 @@ elif section == "📥 Descargar Reporte":
                                 ws_stats.cell(r, c).value = gender_risk_iv.loc[idx, col]
                         row += len(gender_risk_iv) + 2
                     
-                    # Save Excel file to buffer
-                    buffer = io.BytesIO()
-                    wb.save(buffer)
-                    buffer.seek(0)
+                    # Save the workbook
+                    output = io.BytesIO()
+                    wb.save(output)
+                    output.seek(0)
                     
+                    # Provide download button
                     st.download_button(
                         label="📥 Descargar Reporte Excel",
-                        data=buffer,
+                        data=output,
                         file_name=f"Reporte_NOM035_{datetime.now().strftime('%Y%m%d')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
-                    st.success("✅ Reporte generado exitosamente.")
-            except Exception as e:
-                logger.error(f"Error generating Excel report: {str(e)}")
-                st.error(f"❌ Error al generar el reporte: {str(e)}")
-    else:
-        st.warning("🔐 Clave de acceso incorrecta.")
+                    
+                    # Display recommendations
+                    st.subheader("📝 Recomendaciones")
+                    for rec in recommendations:
+                        st.markdown(f"- {rec}")
+                    
+                    # Display visualizations
+                    st.subheader("📊 Visualizaciones")
+                    for vis_type, title, path in visualizations:
+                        st.markdown(f"**{title}**")
+                        if vis_type != 'Text':
+                            st.image(path, use_column_width=True)
+                        else:
+                            st.write(path)
+                
+                except Exception as e:
+                    logger.error(f"Error generating report: {str(e)}")
+                    st.error(f"❌ Error al generar el reporte: {str(e)}")
+    
+    elif access_key:
+        st.error("🔐 Clave de acceso incorrecta.")
 
 # Reiniciar Datos
 elif section == "🔄 Reiniciar Datos":
     st.title("🔄 Reiniciar Datos")
-    st.warning("⚠️ Esta acción eliminará todas las respuestas almacenadas. Proceda con precaución.")
+    st.warning("⚠️ Esta acción eliminará todas las respuestas almacenadas.")
     
-    password = st.text_input("🔑 Ingrese la contraseña de reinicio:", type="password")
-    if st.button("🔄 Reiniciar"):
+    password = st.text_input("🔑 Ingrese la contraseña para reiniciar:", type="password")
+    if st.button("🗑️ Reiniciar"):
         reset_data(password)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
