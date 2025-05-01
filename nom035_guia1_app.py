@@ -620,32 +620,36 @@ except Exception as e:
         st.write(f"Debug: {str(e)}")
 
 def calculate_progress() -> float:
-    """Calculate survey completion progress."""
+    """Calculate survey completion progress based on answering all required questions."""
     try:
-        # Define required fields for Guía I
-        required_keys = (
-            [subfield["id"] for q in GUIDE1_QUESTIONS if q["type"] == "text_group" for subfield in q["subfields"] if not subfield.get("optional", False)]
-            + [q["id"] for q in GUIDE1_QUESTIONS if q["type"] != "text_group"]
-        )
-        total_questions = len(required_keys)  # Count only required fields in Guía I initially
+        # Total questions for Guía I (g1_q1 counts as 1 question with 2 mandatory subfields)
+        total_questions = len(GUIDE1_QUESTIONS)  # 27 questions
+        required_keys = [q["id"] for q in GUIDE1_QUESTIONS]
 
-        # Add Guía II and III if trauma is reported and not yet completed
+        # Add Guía II and III if trauma is reported and survey is not fully complete
         if st.session_state.has_trauma and not st.session_state.guide3_complete:
             required_keys += [q["id"] for q in GUIDE2_QUESTIONS] + [q["id"] for q in GUIDE3_QUESTIONS]
-            total_questions += len(GUIDE2_QUESTIONS) + len(GUIDE3_QUESTIONS)
+            total_questions += len(GUIDE2_QUESTIONS) + len(GUIDE3_QUESTIONS)  # 46 + 26 = 72
 
         answered_questions = 0
         for key in required_keys:
-            response = st.session_state.responses.get(key)
-            if response is not None:
-                if isinstance(response, str):
-                    if response.strip():  # Count non-whitespace strings
-                        answered_questions += 1
-                elif isinstance(response, (int, float)):
-                    if response != 0:  # Count non-zero numbers
-                        answered_questions += 1
-                else:
-                    answered_questions += 1  # Count other non-None responses (e.g., select options)
+            if key == "g1_q1":
+                # g1_q1 is answered only if both mandatory subfields are non-empty
+                nombre = st.session_state.responses.get("g1_q1_nombre", "").strip()
+                apellido = st.session_state.responses.get("g1_q1_apellido", "").strip()
+                if nombre and apellido:
+                    answered_questions += 1
+            else:
+                response = st.session_state.responses.get(key)
+                if response is not None:
+                    if isinstance(response, str):
+                        if response.strip():  # Count non-whitespace strings
+                            answered_questions += 1
+                    elif isinstance(response, (int, float)):
+                        if response != 0:  # Count non-zero numbers
+                            answered_questions += 1
+                    else:
+                        answered_questions += 1  # Count other non-None responses (e.g., select options)
 
         progress = answered_questions / total_questions if total_questions > 0 else 0
         if DEBUG_MODE:
