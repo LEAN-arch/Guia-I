@@ -410,13 +410,13 @@ def generate_statistical_analysis(df):
 def generate_visualizations(df, temp_dir, guia_i_analysis, guia_ii_analysis):
     visualizations = []
     sns.set_style("whitegrid")
-    palette = sns.color_palette("Blues", n_colors=5)
+    pastel_palette = sns.color_palette("pastel", n_colors=5)
     
     if 'Porcentaje con Respuestas Positivas' in guia_i_analysis:
         plt.figure(figsize=(6, 4))
         plt.bar(['Con Respuestas Positivas', 'Sin Respuestas Positivas'], 
                 [guia_i_analysis['Porcentaje con Respuestas Positivas'], 100 - guia_i_analysis['Porcentaje con Respuestas Positivas']],
-                color=palette[2])
+                color=pastel_palette[2])
         plt.title('Porcentaje de Empleados con Respuestas Positivas (Guía I)')
         plt.ylabel('Porcentaje (%)')
         plt.ylim(0, 100)
@@ -429,7 +429,7 @@ def generate_visualizations(df, temp_dir, guia_i_analysis, guia_ii_analysis):
         plt.figure(figsize=(10, 6))
         categories = list(guia_i_analysis['Respuestas Positivas por Categoría'].keys())
         counts = list(guia_i_analysis['Respuestas Positivas por Categoría'].values())
-        plt.bar(categories, counts, color=palette[2])
+        plt.bar(categories, counts, color=pastel_palette[2])
         plt.title('Respuestas Positivas por Categoría (Guía I)')
         plt.xlabel('Categoría')
         plt.ylabel('Número de Respuestas Positivas')
@@ -443,7 +443,7 @@ def generate_visualizations(df, temp_dir, guia_i_analysis, guia_ii_analysis):
         plt.figure(figsize=(10, 6))
         depts = list(guia_i_analysis['Respuestas Positivas por Departamento'].keys())
         counts = list(guia_i_analysis['Respuestas Positivas por Departamento'].values())
-        plt.bar(depts, counts, color=palette[2])
+        plt.bar(depts, counts, color=pastel_palette[2])
         plt.title('Respuestas Positivas por Departamento (Guía I)')
         plt.xlabel('Departamento')
         plt.ylabel('Número de Empleados')
@@ -457,7 +457,7 @@ def generate_visualizations(df, temp_dir, guia_i_analysis, guia_ii_analysis):
         plt.figure(figsize=(6, 4))
         risk_counts = pd.Series(guia_ii_analysis['Distribución de Riesgo Total']).reindex(
             ["Insignificante", "Bajo", "Medio", "Alto", "Muy Alto"], fill_value=0)
-        plt.pie(risk_counts, labels=risk_counts.index, autopct='%1.1f%%', colors=palette)
+        plt.pie(risk_counts, labels=risk_counts.index, autopct='%1.1f%%', colors=pastel_palette)
         plt.title('Distribución de Riesgo Psicosocial Total (Guía II)')
         path = os.path.join(temp_dir, f'risk_distribution_guia_ii_{uuid.uuid4()}.png')
         plt.savefig(path, bbox_inches='tight')
@@ -472,7 +472,7 @@ def generate_visualizations(df, temp_dir, guia_i_analysis, guia_ii_analysis):
             domain_negatives[domain] = sum(guia_ii_analysis['Conteo de Respuestas Negativas (Guía II)'].get(col, 0) for col in domain_cols)
         
         plt.figure(figsize=(12, 6))
-        plt.bar(domain_negatives.keys(), domain_negatives.values(), color=palette[2])
+        plt.bar(domain_negatives.keys(), domain_negatives.values(), color=pastel_palette[2])
         plt.title('Respuestas Negativas por Dominio (Guía II)')
         plt.xlabel('Dominio')
         plt.ylabel('Número de Respuestas Negativas')
@@ -485,7 +485,7 @@ def generate_visualizations(df, temp_dir, guia_i_analysis, guia_ii_analysis):
     
     if '¿Qué edad tienes? (ej. 21)' in df.columns:
         plt.figure(figsize=(6, 4))
-        sns.histplot(df['¿Qué edad tienes? (ej. 21)'].dropna(), kde=True, color=palette[3])
+        sns.histplot(df['¿Qué edad tienes? (ej. 21)'].dropna(), kde=True, color=pastel_palette[3])
         plt.title('Distribución de Edad')
         plt.xlabel('Edad')
         plt.ylabel('Frecuencia')
@@ -493,6 +493,77 @@ def generate_visualizations(df, temp_dir, guia_i_analysis, guia_ii_analysis):
         plt.savefig(path, bbox_inches='tight')
         plt.close()
         visualizations.append(('Histograma', 'Distribución de Edad', path))
+    
+    # Additional visualizations for Guía I
+    if 'Respuestas Positivas por Género' in guia_i_analysis:
+        plt.figure(figsize=(8, 5))
+        genders = list(guia_i_analysis['Respuestas Positivas por Género'].keys())
+        counts = list(guia_i_analysis['Respuestas Positivas por Género'].values())
+        plt.bar(genders, counts, color=pastel_palette[1])
+        plt.title('Respuestas Positivas por Género (Guía I)')
+        plt.xlabel('Género')
+        plt.ylabel('Número de Empleados')
+        plt.xticks(rotation=45, ha='right')
+        path = os.path.join(temp_dir, f'gender_positive_guia_i_{uuid.uuid4()}.png')
+        plt.savefig(path, bbox_inches='tight')
+        plt.close()
+        visualizations.append(('Bar', 'Respuestas Positivas por Género (Guía I)', path))
+    
+    # Additional visualizations for Guía II
+    if 'Riesgo por Departamento (Guía II)' in guia_ii_analysis:
+        plt.figure(figsize=(12, 6))
+        dept_risk_df = pd.DataFrame(guia_ii_analysis['Riesgo por Departamento (Guía II)']).T
+        dept_risk_df = dept_risk_df.reindex(columns=["Insignificante", "Bajo", "Medio", "Alto", "Muy Alto"], fill_value=0)
+        dept_risk_df.plot(kind='bar', stacked=True, color=pastel_palette, figsize=(12, 6))
+        plt.title('Distribución de Riesgo por Departamento (Guía II)')
+        plt.xlabel('Departamento')
+        plt.ylabel('Número de Empleados')
+        plt.xticks(rotation=45, ha='right')
+        plt.legend(title='Nivel de Riesgo')
+        path = os.path.join(temp_dir, f'dept_risk_guia_ii_{uuid.uuid4()}.png')
+        plt.savefig(path, bbox_inches='tight')
+        plt.close()
+        visualizations.append(('Stacked Bar', 'Distribución de Riesgo por Departamento (Guía II)', path))
+    
+    if 'Riesgo por Género (Guía II)' in guia_ii_analysis:
+        plt.figure(figsize=(8, 5))
+        gender_risk_df = pd.DataFrame(guia_ii_analysis['Riesgo por Género (Guía II)']).T
+        gender_risk_df = gender_risk_df.reindex(columns=["Insignificante", "Bajo", "Medio", "Alto", "Muy Alto"], fill_value=0)
+        gender_risk_df.plot(kind='bar', stacked=True, color=pastel_palette, figsize=(8, 5))
+        plt.title('Distribución de Riesgo por Género (Guía II)')
+        plt.xlabel('Género')
+        plt.ylabel('Número de Empleados')
+        plt.xticks(rotation=45, ha='right')
+        plt.legend(title='Nivel de Riesgo')
+        path = os.path.join(temp_dir, f'gender_risk_guia_ii_{uuid.uuid4()}.png')
+        plt.savefig(path, bbox_inches='tight')
+        plt.close()
+        visualizations.append(('Stacked Bar', 'Distribución de Riesgo por Género (Guía II)', path))
+    
+    # Boxplot for Guía II scores by department
+    if 'Puntaje Total (Guía II)' in df.columns and '¿En qué departamento labora?' in df.columns:
+        plt.figure(figsize=(10, 6))
+        sns.boxplot(x='¿En qué departamento labora?', y='Puntaje Total (Guía II)', data=df, palette=pastel_palette)
+        plt.title('Distribución de Puntajes Totales por Departamento (Guía II)')
+        plt.xlabel('Departamento')
+        plt.ylabel('Puntaje Total')
+        plt.xticks(rotation=45, ha='right')
+        path = os.path.join(temp_dir, f'score_boxplot_dept_guia_ii_{uuid.uuid4()}.png')
+        plt.savefig(path, bbox_inches='tight')
+        plt.close()
+        visualizations.append(('Boxplot', 'Distribución de Puntajes Totales por Departamento (Guía II)', path))
+    
+    # Heatmap for Guía II domain scores
+    if any(f'Puntaje {domain}' in df.columns for domain in domain_questions):
+        plt.figure(figsize=(12, 8))
+        domain_cols = [f'Puntaje {domain}' for domain in domain_questions]
+        corr_matrix = df[domain_cols].corr()
+        sns.heatmap(corr_matrix, annot=True, cmap='Pastel1', vmin=-1, vmax=1)
+        plt.title('Matriz de Correlación de Puntajes por Dominio (Guía II)')
+        path = os.path.join(temp_dir, f'domain_correlation_guia_ii_{uuid.uuid4()}.png')
+        plt.savefig(path, bbox_inches='tight')
+        plt.close()
+        visualizations.append(('Heatmap', 'Matriz de Correlación de Puntajes por Dominio (Guía II)', path))
     
     return visualizations
 
@@ -532,13 +603,14 @@ if section == "📋 Evaluación":
                         if all(v != "" and v is not None for v in respuestas.values()):
                             st.session_state.guia_i_responses = respuestas
                             has_positive = has_positive_response_guia_i(respuestas)
-                            st.session_state.show_guia_ii = has_positive
                             if not has_positive:
                                 st.session_state.responses.append(respuestas)
                                 log_response(respuestas, temp_dir)
                                 st.success("✅ ¡Evaluación Guía I completada! No se requiere Guía II.")
                             else:
+                                st.session_state.show_guia_ii = True
                                 st.success("✅ Guía I enviada. Se detectaron respuestas positivas, por favor complete la Guía II.")
+                                st.rerun()  # Automatically move to Guía II
                         else:
                             st.warning("⚠️ Responde todas las preguntas antes de enviar.")
                     except Exception as e:
@@ -557,12 +629,10 @@ if section == "📋 Evaluación":
                             st.markdown(f"**{q}**")
                             respuestas[q] = st.radio("", tipo, horizontal=True, key=f"gii_q{idx}_{q}")
                 
-                col1, col2, col3 = st.columns(3)
+                col1, col2 = st.columns(2)
                 with col1:
                     enviar = st.form_submit_button("✅ Enviar Guía II", help="Enviar respuestas de Guía II", type="primary")
                 with col2:
-                    volver = st.form_submit_button("⬅️ Volver a Guía I", help="Editar respuestas de Guía I", type="secondary")
-                with col3:
                     cancelar = st.form_submit_button("❌ Cancelar", help="Limpiar formulario", type="secondary")
                 
                 if enviar:
@@ -577,11 +647,6 @@ if section == "📋 Evaluación":
                             st.warning("⚠️ Responde todas las preguntas antes de enviar.")
                     except Exception as e:
                         st.error(f"❌ Error al procesar la evaluación: {str(e)}")
-                
-                if volver:
-                    st.session_state.show_guia_ii = False
-                    st.success("✅ Volviendo a Guía I para editar respuestas.")
-                    st.rerun()
                 
                 if cancelar:
                     st.session_state.guia_i_responses = None
