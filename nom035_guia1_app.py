@@ -12,13 +12,18 @@ from typing import Dict, List, Tuple
 # Configure logging for debugging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-DEBUG_MODE = False  # Set to True for debug output
+DEBUG_MODE = True  # Enabled for debugging sidebar issue
 
 # Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
-PASSWORD = os.getenv("SURVEY_PASSWORD", "securepassword123")
-SALT = os.getenv("SURVEY_SALT", secrets.token_hex(16))
+PASSWORD = os.getenv("NOM35", "NOM35")
+SALT = os.getenv("NOM35", secrets.token_hex(16))
+
+# Validate environment variables
+if not PASSWORD or not SALT:
+    logger.error("Missing SURVEY_PASSWORD or SURVEY_SALT in .env file")
+    st.error("Configuration error: Missing password or salt. Contact support.")
 
 # Language translations
 LANGUAGES = {
@@ -61,7 +66,9 @@ LANGUAGES = {
         "log_refreshed": "Registro refrescado exitosamente.",
         "missing_field": "El campo '{field}' está incompleto o no válido.",
         "optional_field": "(Opcional)",
-        "completed": "¡Guía completada exitosamente!"
+        "completed": "¡Guía completada exitosamente!",
+        "file_error": "Error al acceder al archivo de registro. Contacte al soporte.",
+        "sidebar_error": "Error al cargar la barra lateral. Intente de nuevo o contacte al soporte."
     },
     "en": {
         "title": "NOM-035-STPS-2018 Survey",
@@ -102,7 +109,9 @@ LANGUAGES = {
         "log_refreshed": "Log refreshed successfully.",
         "missing_field": "The field '{field}' is incomplete or invalid.",
         "optional_field": "(Optional)",
-        "completed": "Guide completed successfully!"
+        "completed": "Guide completed successfully!",
+        "file_error": "Error accessing the log file. Contact support.",
+        "sidebar_error": "Error loading the sidebar. Try again or contact support."
     }
 }
 
@@ -420,42 +429,58 @@ GUIDE3_QUESTIONS = [
 # Utility Functions
 def hash_password(password: str, salt: str) -> str:
     """Hash password with salt using SHA-256."""
-    salted_password = password + salt
-    return hashlib.sha256(salted_password.encode()).hexdigest()
+    try:
+        salted_password = password + salt
+        return hashlib.sha256(salted_password.encode()).hexdigest()
+    except Exception as e:
+        logger.error(f"Error in hash_password: {str(e)}")
+        return ""
 
 
 CORRECT_PASSWORD_HASH = hash_password(PASSWORD, SALT)
 
 def initialize_log():
     """Initialize log file with headers if it doesn't exist."""
-    if not os.path.exists(LOG_FILE):
-        headers = (
-            ["timestamp"]
-            + [subfield["id"] for q in GUIDE1_QUESTIONS if q["type"] == "text_group" for subfield in q["subfields"]]
-            + [q["id"] for q in GUIDE1_QUESTIONS if q["type"] != "text_group"]
-            + [q["id"] for q in GUIDE2_QUESTIONS]
-            + [q["id"] for q in GUIDE3_QUESTIONS]
-        )
-        pd.DataFrame(columns=headers).to_csv(LOG_FILE, index=False)
+    try:
+        if not os.path.exists(LOG_FILE):
+            headers = (
+                ["timestamp"]
+                + [subfield["id"] for q in GUIDE1_QUESTIONS if q["type"] == "text_group" for subfield in q["subfields"]]
+                + [q["id"] for q in GUIDE1_QUESTIONS if q["type"] != "text_group"]
+                + [q["id"] for q in GUIDE2_QUESTIONS]
+                + [q["id"] for q in GUIDE3_QUESTIONS]
+            )
+            pd.DataFrame(columns=headers).to_csv(LOG_FILE, index=False)
+    except Exception as e:
+        logger.error(f"Error initializing log file: {str(e)}")
+        raise
 
 
 def save_responses_to_log() -> Tuple[pd.DataFrame, str]:
     """Save responses to log file with timestamp."""
-    initialize_log()
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    responses = st.session_state.responses.copy()
-    responses["timestamp"] = timestamp
-    df = pd.DataFrame([responses])
-    existing_df = pd.read_csv(LOG_FILE)
-    updated_df = pd.concat([existing_df, df], ignore_index=True)
-    updated_df.to_csv(LOG_FILE, index=False)
-    return df, timestamp
+    try:
+        initialize_log()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        responses = st.session_state.responses.copy()
+        responses["timestamp"] = timestamp
+        df = pd.DataFrame([responses])
+        existing_df = pd.read_csv(LOG_FILE)
+        updated_df = pd.concat([existing_df, df], ignore_index=True)
+        updated_df.to_csv(LOG_FILE, index=False)
+        return df, timestamp
+    except Exception as e:
+        logger.error(f"Error saving responses to log: {str(e)}")
+        raise
 
 
 def refresh_log() -> bool:
     """Refresh log file by recreating it."""
-    initialize_log()
-    return True
+    try:
+        initialize_log()
+        return True
+    except Exception as e:
+        logger.error(f"Error refreshing log: {str(e)}")
+        raise
 
 
 # Session State Initialization
@@ -535,216 +560,302 @@ st.markdown(
 )
 
 # Sidebar
-lang = st.sidebar.selectbox("Language / Idioma", ["Español", "English"], key="language_selector")
-lang_code = "es" if lang == "Español" else "en"
-t = LANGUAGES[lang_code]
+try:
+    lang = st.sidebar.selectbox("Language / Idioma", ["Español", "English"], key="language_selector")
+    lang_code = "es" if lang == "Español" else "en"
+    t = LANGUAGES[lang_code]
 
-LOG_FILE = "nom035_log.csv"
+    LOG_FILE = "nom035_log.csv"
 
-with st.sidebar:
-    st.subheader(t["download_log"])
-    password_download = st.text_input(t["password_prompt"], type="password", key="download_password")
-    if st.button(t["download_log"], key="download_button"):
-        if action_lock():
-            hashed_input = hash_password(password_download, SALT)
-            if hashed_input == CORRECT_PASSWORD_HASH:
-                if os.path.exists(LOG_FILE):
-                    with open(LOG_FILE, "rb") as f:
-                        csv_bytes = f.read()
-                    b64 = base64.b64encode(csv_bytes).decode()
-                    href = f'<a href="data:file/csv;base64,{b64}" download="nom035_log.csv" role="button" aria-label="Download Log CSV">Download Log CSV</a>'
-                    st.markdown(href, unsafe_allow_html=True)
-                else:
-                    st.warning("No hay datos en el registro.")
-            else:
-                st.error(t["incorrect_password"])
+    with st.sidebar:
+        st.subheader(t["download_log"])
+        password_download = st.text_input(t["password_prompt"], type="password", key="download_password")
+        if st.button(t["download_log"], key="download_button"):
+            if action_lock():
+                try:
+                    hashed_input = hash_password(password_download, SALT)
+                    if hashed_input == CORRECT_PASSWORD_HASH:
+                        if os.path.exists(LOG_FILE):
+                            with open(LOG_FILE, "rb") as f:
+                                csv_bytes = f.read()
+                            b64 = base64.b64encode(csv_bytes).decode()
+                            href = f'<a href="data:file/csv;base64,{b64}" download="nom035_log.csv" role="button" aria-label="Download Log CSV">Download Log CSV</a>'
+                            st.markdown(href, unsafe_allow_html=True)
+                        else:
+                            st.warning("No hay datos en el registro.")
+                    else:
+                        st.error(t["incorrect_password"])
+                except Exception as e:
+                    logger.error(f"Error in download_log: {str(e)}")
+                    st.error(t["file_error"])
 
-    st.subheader(t["refresh_log"])
-    password_refresh = st.text_input(t["password_prompt"], type="password", key="refresh_password")
-    if st.button(t["refresh_log"], key="refresh_button"):
-        if action_lock():
-            hashed_input = hash_password(password_refresh, SALT)
-            if hashed_input == CORRECT_PASSWORD_HASH:
-                refresh_log()
-                st.success(t["log_refreshed"])
-            else:
-                st.error(t["incorrect_password"])
-
+        st.subheader(t["refresh_log"])
+        password_refresh = st.text_input(t["password_prompt"], type="password", key="refresh_password")
+        if st.button(t["refresh_log"], key="refresh_button"):
+            if action_lock():
+                try:
+                    hashed_input = hash_password(password_refresh, SALT)
+                    if hashed_input == CORRECT_PASSWORD_HASH:
+                        refresh_log()
+                        st.success(t["log_refreshed"])
+                    else:
+                        st.error(t["incorrect_password"])
+                except Exception as e:
+                    logger.error(f"Error in refresh_log: {str(e)}")
+                    st.error(t["file_error"])
+except Exception as e:
+    logger.error(f"Sidebar rendering failed: {str(e)}")
+    st.error(t.get("sidebar_error", "Error loading the sidebar. Try again or contact support."))
+    if DEBUG_MODE:
+        st.write(f"Debug: {str(e)}")
 
 def action_lock() -> bool:
     """Prevent rapid button clicks with a 1-second debounce."""
-    current_time = time.time()
-    if current_time - st.session_state.last_action_time < 1:
-        st.warning(t["please_wait"])
+    try:
+        current_time = time.time()
+        if current_time - st.session_state.last_action_time < 1:
+            st.warning(t["please_wait"])
+            return False
+        st.session_state.last_action_time = current_time
+        return True
+    except Exception as e:
+        logger.error(f"Error in action_lock: {str(e)}")
         return False
-    st.session_state.last_action_time = current_time
-    return True
 
 
 def calculate_progress() -> float:
     """Calculate survey completion progress."""
-    total_questions = len(GUIDE1_QUESTIONS) + 2  # +2 for mandatory name subfields
-    if st.session_state.has_trauma:
-        total_questions += len(GUIDE2_QUESTIONS) + len(GUIDE3_QUESTIONS)
+    try:
+        total_questions = len(GUIDE1_QUESTIONS) + 2  # +2 for mandatory name subfields
+        if st.session_state.has_trauma:
+            total_questions += len(GUIDE2_QUESTIONS) + len(GUIDE3_QUESTIONS)
 
-    answered_questions = 0
-    required_keys = (
-        [subfield["id"] for q in GUIDE1_QUESTIONS if q["type"] == "text_group" for subfield in q["subfields"] if not subfield.get("optional", False)]
-        + [q["id"] for q in GUIDE1_QUESTIONS if q["type"] != "text_group"]
-    )
-    if st.session_state.has_trauma:
-        required_keys += [q["id"] for q in GUIDE2_QUESTIONS] + [q["id"] for q in GUIDE3_QUESTIONS]
+        answered_questions = 0
+        required_keys = (
+            [subfield["id"] for q in GUIDE1_QUESTIONS if q["type"] == "text_group" for subfield in q["subfields"] if not subfield.get("optional", False)]
+            + [q["id"] for q in GUIDE1_QUESTIONS if q["type"] != "text_group"]
+        )
+        if st.session_state.has_trauma:
+            required_keys += [q["id"] for q in GUIDE2_QUESTIONS] + [q["id"] for q in GUIDE3_QUESTIONS]
 
-    for key in required_keys:
-        if key in st.session_state.responses and st.session_state.responses[key] not in [None, "", 0]:
-            answered_questions += 1
+        for key in required_keys:
+            if key in st.session_state.responses and st.session_state.responses[key] not in [None, "", 0]:
+                answered_questions += 1
 
-    return answered_questions / total_questions if total_questions > 0 else 0
+        return answered_questions / total_questions if total_questions > 0 else 0
+    except Exception as e:
+        logger.error(f"Error in calculate_progress: {str(e)}")
+        return 0
 
 
 def validate_responses(responses: Dict, guide_questions: List, is_guide1: bool = False) -> Dict[str, str]:
     """Validate survey responses and return field-specific errors."""
-    errors = {}
-    if is_guide1:
-        for subfield in GUIDE1_QUESTIONS[0]["subfields"]:
-            if not subfield.get("optional", False):
-                value = responses.get(subfield["id"], "").strip()
-                if not value:
-                    field_label = subfield["label" if lang_code == "es" else "label_en"]
-                    errors[subfield["id"]] = t["missing_field"].format(field=field_label)
-                    if DEBUG_MODE:
-                        logger.debug(f"Validation failed for {subfield['id']}: Value='{value}'")
+    try:
+        errors = {}
+        if is_guide1:
+            for subfield in GUIDE1_QUESTIONS[0]["subfields"]:
+                if not subfield.get("optional", False):
+                    value = responses.get(subfield["id"], "").strip()
+                    if not value:
+                        field_label = subfield["label" if lang_code == "es" else "label_en"]
+                        errors[subfield["id"]] = t["missing_field"].format(field=field_label)
+                        if DEBUG_MODE:
+                            logger.debug(f"Validation failed for {subfield['id']}: Value='{value}'")
 
-        if "g1_q2" not in responses or not (18 <= responses["g1_q2"] <= 100):
-            errors["g1_q2"] = t["invalid_age"]
+            if "g1_q2" not in responses or not (18 <= responses["g1_q2"] <= 100):
+                errors["g1_q2"] = t["invalid_age"]
 
-        if "g1_q4" in responses and "g1_q2" in responses:
-            if not (0 <= responses["g1_q4"] <= responses["g1_q2"]):
-                errors["g1_q4"] = t["invalid_years_worked"]
+            if "g1_q4" in responses and "g1_q2" in responses:
+                if not (0 <= responses["g1_q4"] <= responses["g1_q2"]):
+                    errors["g1_q4"] = t["invalid_years_worked"]
 
-    required_keys = [q["id"] for q in guide_questions if q["type"] != "text_group"]
-    if is_guide1:
-        required_keys += [subfield["id"] for q in guide_questions if q.get("type") == "text_group" for subfield in q["subfields"] if not subfield.get("optional", False)]
+        required_keys = [q["id"] for q in guide_questions if q["type"] != "text_group"]
+        if is_guide1:
+            required_keys += [subfield["id"] for q in guide_questions if q.get("type") == "text_group" for subfield in q["subfields"] if not subfield.get("optional", False)]
 
-    for key in required_keys:
-        if key not in responses or responses[key] is None or (isinstance(responses[key], str) and not responses[key].strip()):
-            question_text = next((q["text" if lang_code == "es" else "text_en"] for q in guide_questions if q["id"] == key), key)
-            errors[key] = t["missing_field"].format(field=question_text)
-            if DEBUG_MODE:
-                logger.debug(f"Validation failed for {key}: Value='{responses.get(key)}'")
-        elif not is_guide1 and responses[key] not in VALID_RESPONSES_GUIDE2_3:
-            question_text = next((q["text" if lang_code == "es" else "text_en"] for q in guide_questions if q["id"] == key), key)
-            errors[key] = t["missing_field"].format(field=question_text)
-            if DEBUG_MODE:
-                logger.debug(f"Validation failed for {key}: Invalid response='{responses[key]}'")
+        for key in required_keys:
+            if key not in responses or responses[key] is None or (isinstance(responses[key], str) and not responses[key].strip()):
+                question_text = next((q["text" if lang_code == "es" else "text_en"] for q in guide_questions if q["id"] == key), key)
+                errors[key] = t["missing_field"].format(field=question_text)
+                if DEBUG_MODE:
+                    logger.debug(f"Validation failed for {key}: Value='{responses.get(key)}'")
+            elif not is_guide1 and responses[key] not in VALID_RESPONSES_GUIDE2_3:
+                question_text = next((q["text" if lang_code == "es" else "text_en"] for q in guide_questions if q["id"] == key), key)
+                errors[key] = t["missing_field"].format.IOError(field=question_text)
+                if DEBUG_MODE:
+                    logger.debug(f"Validation failed for {key}: Invalid response='{responses[key]}'")
 
-    return errors
+        return errors
+    except Exception as e:
+        logger.error(f"Error in validate_responses: {str(e)}")
+        return {}
 
 
 # Main App
-st.markdown('<div class="container">', unsafe_allow_html=True)
-st.markdown(f'<h1 class="header">{t["title"]}</h1>', unsafe_allow_html=True)
-st.write(t["welcome"])
+try:
+    st.markdown('<div class="container">', unsafe_allow_html=True)
+    st.markdown(f'<h1 class="header">{t["title"]}</h1>', unsafe_allow_html=True)
+    st.write(t["welcome"])
 
-progress = calculate_progress()
-st.progress(progress)
-st.markdown(f'<p class="tooltip">{t["progress"]}: {int(progress * 100)}%</p>', unsafe_allow_html=True)
+    progress = calculate_progress()
+    st.progress(progress)
+    st.markdown(f'<p class="tooltip">{t["progress"]}: {int(progress * 100)}%</p>', unsafe_allow_html=True)
 
-# Define valid responses for Guía II and III
-VALID_RESPONSES_GUIDE2_3 = [t["always"], t["almost_always"], t["sometimes"], t["almost_never"], t["never"]]
+    # Define valid responses for Guía II and III
+    VALID_RESPONSES_GUIDE2_3 = [t["always"], t["almost_always"], t["sometimes"], t["almost_never"], t["never"]]
 
-# Guía I
-if not st.session_state.guide1_complete:
-    st.markdown(f'<h2 class="header">{t["guide1"]}</h2>', unsafe_allow_html=True)
-    st.markdown(f'<p class="tooltip">{t["tooltip_guide1"]}</p>', unsafe_allow_html=True)
+    # Guía I
+    if not st.session_state.guide1_complete:
+        st.markdown(f'<h2 class="header">{t["guide1"]}</h2>', unsafe_allow_html=True)
+        st.markdown(f'<p class="tooltip">{t["tooltip_guide1"]}</p>', unsafe_allow_html=True)
 
-    guide1_groups = [
-        ("personal_info", t["personal_info"], GUIDE1_QUESTIONS[:7]),
-        ("traumatic_events", t["traumatic_events"], GUIDE1_QUESTIONS[7:13]),
-        ("persistent_memories", t["persistent_memories"], GUIDE1_QUESTIONS[13:15]),
-        ("avoidance_efforts", t["avoidance_efforts"], GUIDE1_QUESTIONS[15:22]),
-        ("affectation", t["affectation"], GUIDE1_QUESTIONS[22:]),
-    ]
+        guide1_groups = [
+            ("personal_info", t["personal_info"], GUIDE1_QUESTIONS[:7]),
+            ("traumatic_events", t["traumatic_events"], GUIDE1_QUESTIONS[7:13]),
+            ("persistent_memories", t["persistent_memories"], GUIDE1_QUESTIONS[13:15]),
+            ("avoidance_efforts", t["avoidance_efforts"], GUIDE1_QUESTIONS[15:22]),
+            ("affectation", t["affectation"], GUIDE1_QUESTIONS[22:]),
+        ]
 
-    for group_id, group_label, questions in guide1_groups:
-        with st.expander(group_label, expanded=True):
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            for q in questions:
-                st.markdown(
-                    f'<p class="question" id="question-{q["id"]}" role="heading" aria-label="{q["text" if lang_code == "es" else "text_en"]}">{q["text" if lang_code == "es" else "text_en"]}</p>',
-                    unsafe_allow_html=True,
-                )
-                if q["type"] == "text_group":
-                    for subfield in q["subfields"]:
-                        label = subfield["label" if lang_code == "es" else "label_en"]
-                        if subfield.get("optional", False):
-                            label += f" {t['optional_field']}"
-                        is_invalid = subfield["id"] in st.session_state.validation_errors
+        for group_id, group_label, questions in guide1_groups:
+            with st.expander(group_label, expanded=True):
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                for q in questions:
+                    st.markdown(
+                        f'<p class="question" id="question-{q["id"]}" role="heading" aria-label="{q["text" if lang_code == "es" else "text_en"]}">{q["text" if lang_code == "es" else "text_en"]}</p>',
+                        unsafe_allow_html=True,
+                    )
+                    if q["type"] == "text_group":
+                        for subfield in q["subfields"]:
+                            label = subfield["label" if lang_code == "es" else "label_en"]
+                            if subfield.get("optional", False):
+                                label += f" {t['optional_field']}"
+                            is_invalid = subfield["id"] in st.session_state.validation_errors
+                            css_class = "invalid-field" if is_invalid else ""
+                            st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
+                            response = st.text_input(
+                                label,
+                                key=subfield["id"],
+                                placeholder=subfield["placeholder" if lang_code == "es" else "placeholder_en"],
+                                value=st.session_state.responses.get(subfield["id"], ""),
+                            )
+                            st.session_state.responses[subfield["id"]] = response
+                            if is_invalid:
+                                st.markdown(
+                                    f'<p class="error-message">{st.session_state.validation_errors[subfield["id"]]}</p>',
+                                    unsafe_allow_html=True,
+                                )
+                            st.markdown('</div>', unsafe_allow_html=True)
+                    elif q["type"] == "number":
+                        is_invalid = q["id"] in st.session_state.validation_errors
                         css_class = "invalid-field" if is_invalid else ""
                         st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
-                        response = st.text_input(
-                            label,
-                            key=subfield["id"],
-                            placeholder=subfield["placeholder" if lang_code == "es" else "placeholder_en"],
-                            value=st.session_state.responses.get(subfield["id"], ""),
+                        response = st.number_input(
+                            "",
+                            min_value=0,
+                            max_value=100,
+                            step=1,
+                            key=q["id"],
+                            format="%d",
+                            label_visibility="collapsed",
+                            value=st.session_state.responses.get(q["id"], 0),
                         )
-                        st.session_state.responses[subfield["id"]] = response
+                        st.session_state.responses[q["id"]] = response
                         if is_invalid:
                             st.markdown(
-                                f'<p class="error-message">{st.session_state.validation_errors[subfield["id"]]}</p>',
+                                f'<p class="error-message">{st.session_state.validation_errors[q["id"]]}</p>',
                                 unsafe_allow_html=True,
                             )
                         st.markdown('</div>', unsafe_allow_html=True)
-                elif q["type"] == "number":
-                    is_invalid = q["id"] in st.session_state.validation_errors
-                    css_class = "invalid-field" if is_invalid else ""
-                    st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
-                    response = st.number_input(
-                        "",
-                        min_value=0,
-                        max_value=100,
-                        step=1,
-                        key=q["id"],
-                        format="%d",
-                        label_visibility="collapsed",
-                        value=st.session_state.responses.get(q["id"], 0),
-                    )
-                    st.session_state.responses[q["id"]] = response
-                    if is_invalid:
-                        st.markdown(
-                            f'<p class="error-message">{st.session_state.validation_errors[q["id"]]}</p>',
-                            unsafe_allow_html=True,
+                    elif q["type"] == "select":
+                        is_invalid = q["id"] in st.session_state.validation_errors
+                        css_class = "invalid-field" if is_invalid else ""
+                        st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
+                        response = st.selectbox(
+                            "",
+                            q["options" if lang_code == "es" else "options_en"],
+                            key=q["id"],
+                            label_visibility="collapsed",
+                            index=None,
+                            placeholder="Seleccione / Select",
                         )
-                    st.markdown('</div>', unsafe_allow_html=True)
-                elif q["type"] == "select":
-                    is_invalid = q["id"] in st.session_state.validation_errors
-                    css_class = "invalid-field" if is_invalid else ""
-                    st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
-                    response = st.selectbox(
-                        "",
-                        q["options" if lang_code == "es" else "options_en"],
-                        key=q["id"],
-                        label_visibility="collapsed",
-                        index=None,
-                        placeholder="Seleccione / Select",
-                    )
-                    st.session_state.responses[q["id"]] = response
-                    if is_invalid:
-                        st.markdown(
-                            f'<p class="error-message">{st.session_state.validation_errors[q["id"]]}</p>',
-                            unsafe_allow_html=True,
+                        st.session_state.responses[q["id"]] = response
+                        if is_invalid:
+                            st.markdown(
+                                f'<p class="error-message">{st.session_state.validation_errors[q["id"]]}</p>',
+                                unsafe_allow_html=True,
+                            )
+                        st.markdown('</div>', unsafe_allow_html=True)
+                    elif q["type"] == "yes_no":
+                        st.markdown(f'<div role="radiogroup" aria-describedby="question-{q["id"]}">', unsafe_allow_html=True)
+                        is_invalid = q["id"] in st.session_state.validation_errors
+                        css_class = "invalid-field" if is_invalid else ""
+                        st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
+                        response = st.radio(
+                            "",
+                            [t["yes"], t["no"]],
+                            key=q["id"],
+                            label_visibility="collapsed",
                         )
-                    st.markdown('</div>', unsafe_allow_html=True)
-                elif q["type"] == "yes_no":
-                    st.markdown(f'<div role="radiogroup" aria-describedby="question-{q["id"]}">', unsafe_allow_html=True)
+                        st.session_state.responses[q["id"]] = response
+                        if is_invalid:
+                            st.markdown(
+                                f'<p class="error-message">{st.session_state.validation_errors[q["id"]]}</p>',
+                                unsafe_allow_html=True,
+                            )
+                        st.markdown('</div>', unsafe_allow_html=True)
+                        st.markdown('</div>', unsafe_allow_html=True)
+                        if response == t["yes"]:
+                            st.session_state.has_trauma = True
+                st.markdown('</div>', unsafe_allow_html=True)
+
+        if st.button(t["submit"], key="submit_guide1"):
+            if action_lock():
+                st.session_state.validation_errors = validate_responses(st.session_state.responses, GUIDE1_QUESTIONS, is_guide1=True)
+                if st.session_state.validation_errors:
+                    st.error(t["validation_error"])
+                    st.experimental_rerun()
+                else:
+                    st.session_state.validation_errors = {}
+                    st.session_state.guide1_complete = True
+                    if not st.session_state.has_trauma:
+                        save_responses_to_log()
+                    st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
+
+    # Guía II
+    if st.session_state.guide1_complete and st.session_state.has_trauma and not st.session_state.guide2_complete:
+        st.markdown(f'<h2 class="header">{t["guide2"]}</h2>', unsafe_allow_html=True)
+        st.markdown(f'<p class="tooltip">{t["tooltip_guide2"]}</p>', unsafe_allow_html=True)
+
+        for q in GUIDE2_QUESTIONS:
+            if q["id"] not in st.session_state.responses:
+                st.session_state.responses[q["id"]] = None
+
+        guide2_groups = [
+            ("work_conditions", t["work_conditions"], [q for q in GUIDE2_QUESTIONS if q["group"] == "work_conditions"]),
+            ("workload_pace", t["workload_pace"], [q for q in GUIDE2_QUESTIONS if q["group"] == "workload_pace"]),
+            ("control_decision", t["control_decision"], [q for q in GUIDE2_QUESTIONS if q["group"] == "control_decision"]),
+            ("work_relationships", t["work_relationships"], [q for q in GUIDE2_QUESTIONS if q["group"] == "work_relationships"]),
+            ("work_life_balance", t["work_life_balance"], [q for q in GUIDE2_QUESTIONS if q["group"] == "work_life_balance"]),
+        ]
+
+        for group_id, group_label, questions in guide2_groups:
+            with st.expander(group_label, expanded=True):
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                for q in questions:
+                    st.markdown(
+                        f'<div role="radiogroup" aria-describedby="question-{q["id"]}"><p class="question" id="question-{q["id"]}" role="heading" aria-label="{q["text" if lang_code == "es" else "text_en"]}">{q["text" if lang_code == "es" else "text_en"]}</p>',
+                        unsafe_allow_html=True,
+                    )
                     is_invalid = q["id"] in st.session_state.validation_errors
                     css_class = "invalid-field" if is_invalid else ""
                     st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
                     response = st.radio(
                         "",
-                        [t["yes"], t["no"]],
+                        VALID_RESPONSES_GUIDE2_3,
                         key=q["id"],
                         label_visibility="collapsed",
+                        index=None,
                     )
                     st.session_state.responses[q["id"]] = response
                     if is_invalid:
@@ -754,124 +865,69 @@ if not st.session_state.guide1_complete:
                         )
                     st.markdown('</div>', unsafe_allow_html=True)
                     st.markdown('</div>', unsafe_allow_html=True)
-                    if response == t["yes"]:
-                        st.session_state.has_trauma = True
-            st.markdown('</div>', unsafe_allow_html=True)
-
-    if st.button(t["submit"], key="submit_guide1"):
-        if action_lock():
-            st.session_state.validation_errors = validate_responses(st.session_state.responses, GUIDE1_QUESTIONS, is_guide1=True)
-            if st.session_state.validation_errors:
-                st.error(t["validation_error"])
-                st.experimental_rerun()
-            else:
-                st.session_state.validation_errors = {}
-                st.session_state.guide1_complete = True
-                if not st.session_state.has_trauma:
-                    save_responses_to_log()
-                st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
-
-# Guía II
-if st.session_state.guide1_complete and st.session_state.has_trauma and not st.session_state.guide2_complete:
-    st.markdown(f'<h2 class="header">{t["guide2"]}</h2>', unsafe_allow_html=True)
-    st.markdown(f'<p class="tooltip">{t["tooltip_guide2"]}</p>', unsafe_allow_html=True)
-
-    for q in GUIDE2_QUESTIONS:
-        if q["id"] not in st.session_state.responses:
-            st.session_state.responses[q["id"]] = None
-
-    guide2_groups = [
-        ("work_conditions", t["work_conditions"], [q for q in GUIDE2_QUESTIONS if q["group"] == "work_conditions"]),
-        ("workload_pace", t["workload_pace"], [q for q in GUIDE2_QUESTIONS if q["group"] == "workload_pace"]),
-        ("control_decision", t["control_decision"], [q for q in GUIDE2_QUESTIONS if q["group"] == "control_decision"]),
-        ("work_relationships", t["work_relationships"], [q for q in GUIDE2_QUESTIONS if q["group"] == "work_relationships"]),
-        ("work_life_balance", t["work_life_balance"], [q for q in GUIDE2_QUESTIONS if q["group"] == "work_life_balance"]),
-    ]
-
-    for group_id, group_label, questions in guide2_groups:
-        with st.expander(group_label, expanded=True):
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            for q in questions:
-                st.markdown(
-                    f'<div role="radiogroup" aria-describedby="question-{q["id"]}"><p class="question" id="question-{q["id"]}" role="heading" aria-label="{q["text" if lang_code == "es" else "text_en"]}">{q["text" if lang_code == "es" else "text_en"]}</p>',
-                    unsafe_allow_html=True,
-                )
-                is_invalid = q["id"] in st.session_state.validation_errors
-                css_class = "invalid-field" if is_invalid else ""
-                st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
-                response = st.radio(
-                    "",
-                    VALID_RESPONSES_GUIDE2_3,
-                    key=q["id"],
-                    label_visibility="collapsed",
-                    index=None,
-                )
-                st.session_state.responses[q["id"]] = response
-                if is_invalid:
-                    st.markdown(
-                        f'<p class="error-message">{st.session_state.validation_errors[q["id"]]}</p>',
-                        unsafe_allow_html=True,
-                    )
                 st.markdown('</div>', unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
 
-    if st.button(t["submit"], key="submit_guide2"):
-        if action_lock():
-            st.session_state.validation_errors = validate_responses(st.session_state.responses, GUIDE2_QUESTIONS)
-            if st.session_state.validation_errors:
-                st.error(t["validation_error"])
-                st.experimental_rerun()
-            else:
-                st.session_state.validation_errors = {}
-                st.session_state.guide2_complete = True
-                st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
+        if st.button(t["submit"], key="submit_guide2"):
+            if action_lock():
+                st.session_state.validation_errors = validate_responses(st.session_state.responses, GUIDE2_QUESTIONS)
+                if st.session_state.validation_errors:
+                    st.error(t["validation_error"])
+                    st.experimental_rerun()
+                else:
+                    st.session_state.validation_errors = {}
+                    st.session_state.guide2_complete = True
+                    st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
 
-# Guía III
-if st.session_state.guide2_complete and st.session_state.has_trauma and not st.session_state.guide3_complete:
-    st.markdown(f'<h2 class="header">{t["guide3"]}</h2>', unsafe_allow_html=True)
-    st.markdown(f'<p class="tooltip">{t["tooltip_guide3"]}</p>', unsafe_allow_html=True)
+    # Guía III
+    if st.session_state.guide2_complete and st.session_state.has_trauma and not st.session_state.guide3_complete:
+        st.markdown(f'<h2 class="header">{t["guide3"]}</h2>', unsafe_allow_html=True)
+        st.markdown(f'<p class="tooltip">{t["tooltip_guide3"]}</p>', unsafe_allow_html=True)
 
-    for q in GUIDE3_QUESTIONS:
-        if q["id"] not in st.session_state.responses:
-            st.session_state.responses[q["id"]] = None
+        for q in GUIDE3_QUESTIONS:
+            if q["id"] not in st.session_state.responses:
+                st.session_state.responses[q["id"]] = None
 
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    for q in GUIDE3_QUESTIONS:
-        st.markdown(
-            f'<div role="radiogroup" aria-describedby="question-{q["id"]}"><p class="question" id="question-{q["id"]}" role="heading" aria-label="{q["text" if lang_code == "es" else "text_en"]}">{q["text" if lang_code == "es" else "text_en"]}</p>',
-            unsafe_allow_html=True,
-        )
-        is_invalid = q["id"] in st.session_state.validation_errors
-        css_class = "invalid-field" if is_invalid else ""
-        st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
-        response = st.radio(
-            "",
-            VALID_RESPONSES_GUIDE2_3,
-            key=q["id"],
-            label_visibility="collapsed",
-            index=None,
-        )
-        st.session_state.responses[q["id"]] = response
-        if is_invalid:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        for q in GUIDE3_QUESTIONS:
             st.markdown(
-                f'<p class="error-message">{st.session_state.validation_errors[q["id"]]}</p>',
+                f'<div role="radiogroup" aria-describedby="question-{q["id"]}"><p class="question" id="question-{q["id"]}" role="heading" aria-label="{q["text" if lang_code == "es" else "text_en"]}">{q["text" if lang_code == "es" else "text_en"]}</p>',
                 unsafe_allow_html=True,
             )
+            is_invalid = q["id"] in st.session_state.validation_errors
+            css_class = "invalid-field" if is_invalid else ""
+            st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
+            response = st.radio(
+                "",
+                VALID_RESPONSES_GUIDE2_3,
+                key=q["id"],
+                label_visibility="collapsed",
+                index=None,
+            )
+            st.session_state.responses[q["id"]] = response
+            if is_invalid:
+                st.markdown(
+                    f'<p class="error-message">{st.session_state.validation_errors[q["id"]]}</p>',
+                    unsafe_allow_html=True,
+                )
+            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+
+        if st.button(t["submit"], key="submit_guide3"):
+            if action_lock():
+                st.session_state.validation_errors = validate_responses(st.session_state.responses, GUIDE3_QUESTIONS)
+                if st.session_state.validation_errors:
+                    st.error(t["validation_error"])
+                    st.experimental_rerun()
+                else:
+                    st.session_state.validation_errors = {}
+                    st.session_state.guide3_complete = True
+                    save_responses_to_log()
+                    st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
+
     st.markdown('</div>', unsafe_allow_html=True)
-
-    if st.button(t["submit"], key="submit_guide3"):
-        if action_lock():
-            st.session_state.validation_errors = validate_responses(st.session_state.responses, GUIDE3_QUESTIONS)
-            if st.session_state.validation_errors:
-                st.error(t["validation_error"])
-                st.experimental_rerun()
-            else:
-                st.session_state.validation_errors = {}
-                st.session_state.guide3_complete = True
-                save_responses_to_log()
-                st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
-
-st.markdown('</div>', unsafe_allow_html=True)
+except Exception as e:
+    logger.error(f"Main app rendering failed: {str(e)}")
+    st.error("Error loading the survey. Try again or contact support.")
+    if DEBUG_MODE:
+        st.write(f"Debug: {str(e)}")
