@@ -1,4 +1,3 @@
-```python
 import streamlit as st
 import pandas as pd
 import io
@@ -11,124 +10,124 @@ import tempfile
 import numpy as np
 from scipy import stats
 
-# Configuración de página
-st.set_page_config(page_title="🧠 NOM-035 Guía I", layout="centered")
+# Configuracion de pagina
+st.set_page_config(page_title="🧠 NOM-035 Guia I", layout="centered")
 
 # Clave de acceso predeterminada
-ACCESS_KEY = "NOM035_ACCESS_2025"
+ACCESS_KEY = "NOM035G1"
 
 if "responses" not in st.session_state:
     st.session_state.responses = []
 
 # Sidebar
 st.sidebar.image("assets/FOBO2.png", width=100)
-st.sidebar.title("Evaluación NOM-035")
-section = st.sidebar.radio("Ir a sección:", ["📋 Evaluación", "📥 Descargar Reporte"])
+st.sidebar.title("Evaluacion NOM-035")
+section = st.sidebar.radio("Ir a seccion:", ["📋 Evaluacion", "📥 Descargar Reporte"])
 
 # Preguntas (27 en total, organizadas en secciones)
 questions = [
     {
-        "section": "Información Personal",
+        "section": "Informacion Personal",
         "items": [
             ("Nombre", "text"),
             ("Apellido Paterno", "text"),
             ("Apellido Materno", "text"),
-            ("¿Qué edad tienes? (ej. 21)", "number"),
-            ("¿Cuál es tu género?", ["Femenino", "Masculino", "LGTBTTTIQ+", "Otro"]),
-            ("¿Cuántos años llevas trabajando aquí?", "number"),
-            ("¿En qué departamento labora?", ["Mantenimiento", "Control de Calidad", "Manufactura", "Ventas", "Producción", "Recursos Humanos", "Ventas y Marketing", "Contabilidad y Finanzas", "Administración"]),
-            ("¿Cuál es su función?", ["Operador", "Técnico", "Ingeniero", "Analista", "Supervisor", "Gerente", "Director"]),
-            ("¿Dónde se encuentra su lugar de trabajo?", ["Planta 1", "Planta 2", "Planta 3"]),
+            ("¿Que edad tienes? (ej. 21)", "number"),
+            ("¿Cual es tu genero?", ["Femenino", "Masculino", "LGTBTTTIQ+", "Otro"]),
+            ("¿Cuantos anos llevas trabajando aqui?", "number"),
+            ("¿En que departamento labora?", ["Mantenimiento", "Control de Calidad", "Manufactura", "Ventas", "Produccion", "Recursos Humanos", "Ventas y Marketing", "Contabilidad y Finanzas", "Administracion"]),
+            ("¿Cual es su funcion?", ["Operador", "Tecnico", "Ingeniero", "Analista", "Supervisor", "Gerente", "Director"]),
+            ("¿Donde se encuentra su lugar de trabajo?", ["Planta 1", "Planta 2", "Planta 3"]),
         ]
     },
     {
-        "section": "Eventos Traumáticos Severos",
+        "section": "Eventos Traumaticos Severos",
         "items": [
-            ("¿Ha presenciado o sufrido un accidente grave?", ["Sí", "No"]),
-            ("¿Ha presenciado o sufrido un asalto?", ["Sí", "No"]),
-            ("¿Ha presenciado actos violentos con lesiones?", ["Sí", "No"]),
-            ("¿Ha presenciado o sufrido un secuestro?", ["Sí", "No"]),
-            ("¿Ha recibido amenazas?", ["Sí", "No"]),
-            ("¿Otra situación que ponga en riesgo su vida o salud?", ["Sí", "No"]),
+            ("¿Ha presenciado o sufrido un accidente grave?", ["Si", "No"]),
+            ("¿Ha presenciado o sufrido un asalto?", ["Si", "No"]),
+            ("¿Ha presenciado actos violentos con lesiones?", ["Si", "No"]),
+            ("¿Ha presenciado o sufrido un secuestro?", ["Si", "No"]),
+            ("¿Ha recibido amenazas?", ["Si", "No"]),
+            ("¿Otra situacion que ponga en riesgo su vida o salud?", ["Si", "No"]),
         ]
     },
     {
-        "section": "Síntomas de Reexperimentación",
+        "section": "Sintomas de Reexperimentacion",
         "items": [
-            ("¿Recuerdos recurrentes que causan malestar?", ["Sí", "No"]),
-            ("¿Sueños recurrentes que causan malestar?", ["Sí", "No"]),
+            ("¿Recuerdos recurrentes que causan malestar?", ["Si", "No"]),
+            ("¿Suenos recurrentes que causan malestar?", ["Si", "No"]),
         ]
     },
     {
-        "section": "Síntomas de Evitación",
+        "section": "Sintomas de Evitacion",
         "items": [
-            ("¿Evita sentimientos o situaciones asociadas?", ["Sí", "No"]),
-            ("¿Evita actividades o lugares asociados?", ["Sí", "No"]),
-            ("¿Dificultad para recordar partes del evento?", ["Sí", "No"]),
+            ("¿Evita sentimientos o situaciones asociadas?", ["Si", "No"]),
+            ("¿Evita actividades o lugares asociados?", ["Si", "No"]),
+            ("¿Dificultad para recordar partes del evento?", ["Si", "No"]),
         ]
     },
     {
-        "section": "Síntomas de Afectación Emocional",
+        "section": "Sintomas de Afectacion Emocional",
         "items": [
-            ("¿Menor interés en actividades cotidianas?", ["Sí", "No"]),
-            ("¿Se siente alejado o distante de los demás?", ["Sí", "No"]),
-            ("¿Dificultad para expresar sentimientos?", ["Sí", "No"]),
-            ("¿Sensación de vida corta o futuro limitado?", ["Sí", "No"]),
+            ("¿Menor interes en actividades cotidianas?", ["Si", "No"]),
+            ("¿Se siente alejado o distante de los demas?", ["Si", "No"]),
+            ("¿Dificultad para expresar sentimientos?", ["Si", "No"]),
+            ("¿Sensacion de vida corta o futuro limitado?", ["Si", "No"]),
         ]
     },
     {
-        "section": "Síntomas de Activación",
+        "section": "Sintomas de Activacion",
         "items": [
-            ("¿Dificultad para dormir?", ["Sí", "No"]),
-            ("¿Irritabilidad o coraje?", ["Sí", "No"]),
-            ("¿Dificultad para concentrarse?", ["Sí", "No"]),
-            ("¿Nerviosismo o alerta constante?", ["Sí", "No"]),
-            ("¿Se sobresalta fácilmente?", ["Sí", "No"]),
+            ("¿Dificultad para dormir?", ["Si", "No"]),
+            ("¿Irritabilidad o coraje?", ["Si", "No"]),
+            ("¿Dificultad para concentrarse?", ["Si", "No"]),
+            ("¿Nerviosismo o alerta constante?", ["Si", "No"]),
+            ("¿Se sobresalta facilmente?", ["Si", "No"]),
         ]
     }
 ]
 
-# Función para generar análisis estadístico
+# Funcion para generar analisis estadistico
 def generate_statistical_analysis(df):
     analysis = {}
     
-    # Estadísticas descriptivas para variables numéricas
+    # Estadisticas descriptivas para variables numericas
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     if numeric_cols.any():
         desc_stats = df[numeric_cols].describe().round(2)
-        analysis['Descriptivas Numéricas'] = desc_stats.to_dict()
+        analysis['Descriptivas Numericas'] = desc_stats.to_dict()
     
-    # Frecuencias para variables categóricas
+    # Frecuencias para variables categoricas
     categorical_cols = df.select_dtypes(include=['object']).columns
     freq_tables = {}
     for col in categorical_cols:
         freq = df[col].value_counts().to_dict()
         freq_tables[col] = freq
-    analysis['Frecuencias Categóricas'] = freq_tables
+    analysis['Frecuencias Categoricas'] = freq_tables
     
-    # Correlación entre variables numéricas (si hay más de una)
+    # Correlacion entre variables numericas (si hay mas de una)
     if len(numeric_cols) > 1:
         correlation = df[numeric_cols].corr().round(2).to_dict()
-        analysis['Correlación'] = correlation
+        analysis['Correlacion'] = correlation
     
-    # Análisis de síntomas (Sí/No)
-    symptom_cols = [q["items"][0][0] for q in questions[1:]]  # Preguntas de Sí/No
+    # Analisis de sintomas (Si/No)
+    symptom_cols = [q["items"][0][0] for q in questions[1:]]  # Preguntas de Si/No
     symptom_data = df[symptom_cols]
-    symptom_counts = symptom_data.apply(lambda x: (x == 'Sí').sum())
-    analysis['Conteo de Síntomas'] = symptom_counts.to_dict()
+    symptom_counts = symptom_data.apply(lambda x: (x == 'Si').sum())
+    analysis['Conteo de Sintomas'] = symptom_counts.to_dict()
     
     return analysis
 
-# Función para generar visualizaciones y guardarlas como imágenes
+# Funcion para generar visualizaciones y guardarlas como imagenes
 def generate_visualizations(df, temp_dir):
     visualizations = []
     
-    # Histograma para variables numéricas
+    # Histograma para variables numericas
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     for col in numeric_cols:
         plt.figure(figsize=(6, 4))
         sns.histplot(df[col], kde=True)
-        plt.title(f'Distribución de {col}')
+        plt.title(f'Distribucion de {col}')
         plt.xlabel(col)
         plt.ylabel('Frecuencia')
         hist_path = os.path.join(temp_dir, f'hist_{col}.png')
@@ -136,7 +135,7 @@ def generate_visualizations(df, temp_dir):
         plt.close()
         visualizations.append(('Histograma', col, hist_path))
     
-    # Gráficos de barras para variables categóricas
+    # Graficos de barras para variables categoricas
     categorical_cols = df.select_dtypes(include=['object']).columns
     for col in categorical_cols:
         plt.figure(figsize=(6, 4))
@@ -150,7 +149,7 @@ def generate_visualizations(df, temp_dir):
         plt.close()
         visualizations.append(('Barra', col, bar_path))
     
-    # Heatmap de correlación (si aplica)
+    # Heatmap de correlacion (si aplica)
     if len(numeric_cols) > 1:
         plt.figure(figsize=(6, 4))
         sns.heatmap(df[numeric_cols].corr(), annot=True, cmap='coolwarm')
@@ -158,14 +157,14 @@ def generate_visualizations(df, temp_dir):
         corr_path = os.path.join(temp_dir, 'correlation_heatmap.png')
         plt.savefig(corr_path, bbox_inches='tight')
         plt.close()
-        visualizations.append(('Heatmap', 'Correlación', corr_path))
+        visualizations.append(('Heatmap', 'Correlacion', corr_path))
     
     return visualizations
 
-# Evaluación
-if section == "📋 Evaluación":
-    st.title("🧠 Evaluación Psicosocial - NOM-035 Guía I")
-    st.markdown("Por favor responda con honestidad. La información será confidencial.")
+# Evaluacion
+if section == "📋 Evaluacion":
+    st.title("🧠 Evaluacion Psicosocial - NOM-035 Guia I")
+    st.markdown("Por favor responda con honestidad. La informacion sera confidencial.")
 
     with st.form("nom035_form"):
         respuestas = {}
@@ -180,16 +179,16 @@ if section == "📋 Evaluación":
                     elif isinstance(tipo, list):
                         respuestas[q] = st.radio("", tipo, horizontal=True, key=f"q{idx}_{q}")
 
-        enviar = st.form_submit_button("✅ Enviar evaluación")
+        enviar = st.form_submit_button("✅ Enviar evaluacion")
         if enviar:
             try:
                 if all(v != "" for v in respuestas.values()):
                     st.session_state.responses.append(respuestas)
-                    st.success("✅ ¡Evaluación enviada exitosamente!")
+                    st.success("✅ ¡Evaluacion enviada exitosamente!")
                 else:
                     st.warning("⚠️ Responde todas las preguntas antes de enviar.")
             except Exception as e:
-                st.error(f"❌ Error al procesar la evaluación: {str(e)}")
+                st.error(f"❌ Error al procesar la evaluacion: {str(e)}")
 
 # Reporte Excel/CSV
 if section == "📥 Descargar Reporte":
@@ -204,7 +203,7 @@ if section == "📥 Descargar Reporte":
             
             # Crear directorio temporal para visualizaciones
             with tempfile.TemporaryDirectory() as temp_dir:
-                # Generar análisis estadístico
+                # Generar analisis estadistico
                 analysis = generate_statistical_analysis(df)
                 
                 # Generar visualizaciones
@@ -220,25 +219,25 @@ if section == "📥 Descargar Reporte":
                 for row in df.itertuples(index=False):
                     ws_data.append([str(cell) for cell in row])
                 
-                # Hoja de análisis estadístico
-                ws_stats = wb.create_sheet("Análisis Estadístico")
+                # Hoja de analisis estadistico
+                ws_stats = wb.create_sheet("Analisis Estadistico")
                 row = 1
                 
-                # Descriptivas numéricas
-                if 'Descriptivas Numéricas' in analysis:
-                    ws_stats.cell(row, 1).value = "Estadísticas Descriptivas (Numéricas)"
+                # Descriptivas numericas
+                if 'Descriptivas Numericas' in analysis:
+                    ws_stats.cell(row, 1).value = "Estadisticas Descriptivas (Numericas)"
                     row += 1
-                    desc_df = pd.DataFrame(analysis['Descriptivas Numéricas'])
+                    desc_df = pd.DataFrame(analysis['Descriptivas Numericas'])
                     for r, idx in enumerate(desc_df.index, start=row):
                         ws_stats.cell(r, 1).value = idx
                         for c, col in enumerate(desc_df.columns, start=2):
                             ws_stats.cell(r, c).value = desc_df.loc[idx, col]
                     row += len(desc_df) + 2
                 
-                # Frecuencias categóricas
-                ws_stats.cell(row, 1).value = "Frecuencias Categóricas"
+                # Frecuencias categoricas
+                ws_stats.cell(row, 1).value = "Frecuencias Categoricas"
                 row += 1
-                for col, freq in analysis['Frecuencias Categóricas'].items():
+                for col, freq in analysis['Frecuencias Categoricas'].items():
                     ws_stats.cell(row, 1).value = col
                     row += 1
                     for k, v in freq.items():
@@ -247,21 +246,21 @@ if section == "📥 Descargar Reporte":
                         row += 1
                     row += 1
                 
-                # Correlación
-                if 'Correlación' in analysis:
-                    ws_stats.cell(row, 1).value = "Correlación"
+                # Correlacion
+                if 'Correlacion' in analysis:
+                    ws_stats.cell(row, 1).value = "Correlacion"
                     row += 1
-                    corr_df = pd.DataFrame(analysis['Correlación'])
+                    corr_df = pd.DataFrame(analysis['Correlacion'])
                     for r, idx in enumerate(corr_df.index, start=row):
                         ws_stats.cell(r, 1).value = idx
                         for c, col in enumerate(corr_df.columns, start=2):
                             ws_stats.cell(r, c).value = corr_df.loc[idx, col]
                     row += len(corr_df) + 2
                 
-                # Conteo de síntomas
-                ws_stats.cell(row, 1).value = "Conteo de Síntomas (Respuestas 'Sí')"
+                # Conteo de sintomas
+                ws_stats.cell(row, 1).value = "Conteo de Sintomas (Respuestas 'Si')"
                 row += 1
-                for col, count in analysis['Conteo de Síntomas'].items():
+                for col, count in analysis['Conteo de Sintomas'].items():
                     ws_stats.cell(row, 1).value = col
                     ws_stats.cell(row, 2).value = count
                     row += 1
@@ -273,7 +272,7 @@ if section == "📥 Descargar Reporte":
                     ws_viz.cell(row_viz, 1).value = f"{viz_type}: {col}"
                     img = Image(img_path)
                     ws_viz.add_image(img, f'B{row_viz}')
-                    row_viz += 20  # Espacio para imágenes
+                    row_viz += 20  # Espacio para imagenes
                 
                 # Guardar Excel
                 excel_io = io.BytesIO()
@@ -306,39 +305,3 @@ if section == "📥 Descargar Reporte":
         st.error("🔐 Clave de acceso incorrecta.")
     else:
         st.warning("⚠️ Ingrese la clave de acceso para descargar los datos.")
-```
-
-### Changes Made:
-1. **Statistical Analysis**:
-   - **Descriptive Statistics**: For numerical columns (e.g., age, years working), includes mean, std, min, max, quartiles.
-   - **Frequency Tables**: For categorical columns (e.g., gender, department, Sí/No questions), provides counts of each category.
-   - **Correlation Analysis**: For numerical variables, computes Pearson correlation matrix (if multiple numerical columns exist).
-   - **Symptom Counts**: Counts the number of "Sí" responses for symptom-related questions to highlight prevalence.
-
-2. **Visualizations**:
-   - **Histograms**: For numerical variables, showing distribution with kernel density estimation.
-   - **Bar Plots**: For categorical variables, showing frequency of each category.
-   - **Correlation Heatmap**: For numerical variables, visualizing correlations (if applicable).
-   - Visualizations are saved as PNG files in a temporary directory and embedded in the Excel file’s "Visualizaciones" sheet.
-
-3. **Excel Structure**:
-   - **Datos Crudos**: Raw data as collected.
-   - **Análisis Estadístico**: Includes descriptive stats, frequency tables, correlations, and symptom counts in a structured format.
-   - **Visualizaciones**: Embeds visualization images with labels for each plot.
-
-4. **CSV Output**:
-   - Remains limited to raw data due to CSV’s text-based nature, which doesn’t support embedded images or complex formatting.
-
-5. **Error Handling**:
-   - Robust error handling around statistical computations and file operations to prevent crashes.
-
-6. **Dependencies**:
-   - Added `matplotlib`, `seaborn`, `scipy`, and `openpyxl` for statistical analysis and visualization.
-
-### Notes:
-- Ensure `matplotlib`, `seaborn`, `scipy`, and `openpyxl` are installed in your environment (`pip install matplotlib seaborn scipy openpyxl`).
-- Visualizations are embedded in the Excel file, but their size and placement may need adjustment depending on your needs (modify `row_viz += 20` for spacing).
-- The CSV file only includes raw data, as statistical summaries and images are not feasible in CSV format.
-- The analysis assumes sufficient data for meaningful statistics; with very few responses, some visualizations (e.g., histograms) may be less informative.
-
-This code provides a professional, comprehensive report tailored for Spanish-speaking professionals, with advanced analytics and visualizations embedded in the Excel output.
