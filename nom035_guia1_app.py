@@ -102,14 +102,14 @@ def enviar_respuesta_por_correo(respuestas_dict):
     try:
         mensaje = EmailMessage()
         mensaje["Subject"] = "Nueva respuesta - NOM-035-STPS-2018 Guía I"
-        mensaje["From"] = "jbautistamsc@gmail.com"
-        mensaje["To"] = "contacto@lean2institute.org", "jbautistamsc@gmail.com"
+        mensaje["From"] = "@gmail.com"
+        mensaje["To"] = "contacto@lean2institute.org", "@gmail.com"
 
         cuerpo = "\n".join([f"{k}: {v}" for k, v in respuestas_dict.items()])
         mensaje.set_content(cuerpo)
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-            smtp.login("jbautistamsc@gmail.com", "Patula1!")
+            smtp.login("@gmail.com", "xx")
             smtp.send_message(mensaje)
 
         return True
