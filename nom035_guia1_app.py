@@ -1259,7 +1259,7 @@ elif section == "📥 Descargar Reporte":
                             ws_stats.cell(r, 1).value = idx
                             for c, col in enumerate(gender_risk_iv.columns, start=2):
                             ws_stats.cell(row, c).value = col
-                        row += 1
+                            row += 1
                         for r, idx in enumerate(gender_risk_iv.index, start=row):
                             ws_stats.cell(r, 1).value = idx
                             for c, col in enumerate(gender_risk_iv.columns, start=2):
