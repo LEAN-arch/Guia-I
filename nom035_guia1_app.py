@@ -53,7 +53,7 @@ def reset_data(password):
 
 # Sidebar
 st.sidebar.image("assets/FOBO2.png", width=100)
-st.sidebar.title("Evaluacion NOM-035")
+st.sidebar.title("Evaluacion NOM-035 Guia I")
 section = st.sidebar.radio("Ir a seccion:", ["📋 Evaluacion", "📥 Descargar Reporte", "🔄 Reiniciar Datos"])
 
 # Preguntas (27 en total, organizadas en secciones)
