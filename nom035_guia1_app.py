@@ -17,8 +17,8 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-ACCESS_KEY = os.getenv("NOM035_ACCESS_KEY", "NOM035_ACCESS_2025")
-RESET_PASSWORD = os.getenv("NOM035_RESET_PASSWORD", "RESET_NOM035_2025")
+ACCESS_KEY = os.getenv("NOM035")
+RESET_PASSWORD = os.getenv("NOM035RESET")
 
 # Configure logging
 logging.basicConfig(
