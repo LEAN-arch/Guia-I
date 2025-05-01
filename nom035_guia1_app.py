@@ -1257,16 +1257,16 @@ elif section == "📥 Descargar Reporte":
                     )
                     st.success("✅ Reporte generado exitosamente.")
             except Exception as e:
-                    logger.error(f"Error generating Excel report: {str(e)}")
-                                    st.error(f"❌ Error al generar el reporte: {str(e)}")
-                        else:
-                            st.warning("🔐 Clave de acceso incorrecta.")
-                    
-                    # Reiniciar Datos
-                    elif section == "🔄 Reiniciar Datos":
-                        st.title("🔄 Reiniciar Datos")
-                        st.warning("⚠️ Esta acción eliminará todas las respuestas almacenadas. Proceda con precaución.")
-                        
-                        password = st.text_input("🔑 Ingrese la contraseña de reinicio:", type="password")
-                        if st.button("🔄 Reiniciar"):
-                            reset_data(password)
+                logger.error(f"Error generating Excel report: {str(e)}")
+                st.error(f"❌ Error al generar el reporte: {str(e)}")
+    else:
+        st.warning("🔐 Clave de acceso incorrecta.")
+
+# Reiniciar Datos
+elif section == "🔄 Reiniciar Datos":
+    st.title("🔄 Reiniciar Datos")
+    st.warning("⚠️ Esta acción eliminará todas las respuestas almacenadas. Proceda con precaución.")
+    
+    password = st.text_input("🔑 Ingrese la contraseña de reinicio:", type="password")
+    if st.button("🔄 Reiniciar"):
+        reset_data(password)
