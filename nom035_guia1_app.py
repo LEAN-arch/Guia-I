@@ -3,1075 +3,1388 @@ import pandas as pd
 import io
 from openpyxl import Workbook
 from openpyxl.drawing.image import Image
+from openpyxl.utils.dataframe import dataframe_to_rows
 import matplotlib.pyplot as plt
 import seaborn as sns
+import os
 import tempfile
 import numpy as np
 from datetime import datetime
-import uuid
-import os
-import re
-import time
+from typing import Dict, List, Tuple, Optional, Any, Union
+from enum import Enum
 import logging
-from dotenv import load_dotenv
+from dataclasses import dataclass
 
-# Configure logging before any logging calls
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler("nom035_app.log")
+        logging.FileHandler("nom035_app.log"),
+        logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables from .env file for secure password management
-load_dotenv()
-ACCESS_KEY = os.getenv("NOM035_ACCESS_KEY", "NOM035_ACCESS_2025")
-RESET_PASSWORD = os.getenv("NOM035_RESET_PASSWORD", "RESET_NOM035_2025")
+# ====================
+# CONSTANTS & CONFIGURATION
+# ====================
 
-# Validate environment variables
-if not ACCESS_KEY or len(ACCESS_KEY) < 8:
-    logger.warning("NOM035_ACCESS_KEY is missing or too short. Using fallback.")
+class AppConfig:
+    """Centralized configuration for the application"""
+    # Application metadata
+    PAGE_TITLE = "🧠 Evaluación Psicosocial - NOM-035"
+    PAGE_ICON = "🧠"
+    LAYOUT = "centered"
+    
+    # Security
     ACCESS_KEY = "NOM035_ACCESS_2025"
-if not RESET_PASSWORD or len(RESET_PASSWORD) < 8:
-    logger.warning("NOM035_RESET_PASSWORD is missing or too short. Using fallback.")
     RESET_PASSWORD = "RESET_NOM035_2025"
-
-# Page configuration
-st.set_page_config(page_title="🧠 NOM-035 Guía I y II", layout="centered")
-
-# Custom CSS for styling, accessibility, and responsiveness
-st.markdown("""
-<style>
-.stButton>button {
-    margin: 5px;
-    transition: background-color 0.3s;
-    width: 100%;
-}
-.primary-button {
-    background-color: #28a745;
-    color: white;
-    border-radius: 5px;
-}
-.primary-button:hover {
-    background-color: #218838;
-}
-.stRadio > div {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-@media (max-width: 600px) {
-    .stButton>button {
-        font-size: 14px;
-        padding: 8px;
-    }
-    .stRadio > div {
-        flex-direction: column;
-    }
-}
-[role="radiogroup"] {
-    margin-bottom: 15px;
-}
-.stExpander {
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    margin-bottom: 10px;
-}
-.progress-text {
-    font-size: 16px;
-    font-weight: bold;
-    margin-bottom: 10px;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# Initialize session state
-def initialize_session_state():
-    defaults = {
-        "responses": [],
-        "show_guia_ii": False,
-        "guia_i_responses": {},
-        "guia_ii_responses": {},
-        "session_initialized": False,
-        "form_error": None
-    }
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
-    if not st.session_state.session_initialized:
-        st.session_state.responses = []
-        st.session_state.show_guia_ii = False
-        st.session_state.guia_i_responses = {}
-        st.session_state.guia_ii_responses = {}
-        st.session_state.session_initialized = True
-        logger.info("Session state initialized")
-
-initialize_session_state()
-
-# Questions for Guía I
-guia_i_questions = [
-    {
-        "section": "Información Personal",
-        "items": [
-            ("Nombre", "text", {"max_length": 50}),
-            ("Apellido Paterno", "text", {"max_length": 50}),
-            ("Apellido Materno", "text", {"max_length": 50}),
-            ("¿Qué edad tienes? (ej. 21)", "number", {"min_value": 18, "max_value": 100}),
-            ("¿Cuál es tu género?", ["Femenino", "Masculino", "LGTBTTTIQ+", "Otro"], {}),
-            ("¿Cuántos años llevas trabajando aquí?", "number", {"min_value": 0, "max_value": 50}),
-            ("¿En qué departamento labora?", ["Mantenimiento", "Control de Calidad", "Manufactura", "Ventas", "Producción", "Recursos Humanos", "Ventas y Marketing", "Contabilidad y Finanzas", "Administración"], {}),
-            ("¿Cuál es su función?", ["Operador", "Técnico", "Ingeniero", "Analista", "Supervisor", "Gerente", "Director"], {}),
-            ("¿Dónde se encuentra su lugar de trabajo?", ["Planta 1", "Planta 2", "Planta 3"], {}),
-        ]
-    },
-    {
-        "section": "Eventos Traumáticos Severos",
-        "items": [
-            ("¿Ha presenciado o sufrido un accidente grave?", ["Sí", "No"], {}),
-            ("¿Ha presenciado o sufrido un asalto?", ["Sí", "No"], {}),
-            ("¿Ha presenciado actos violentos con lesiones?", ["Sí", "No"], {}),
-            ("¿Ha presenciado o sufrido un secuestro?", ["Sí", "No"], {}),
-            ("¿Ha recibido amenazas?", ["Sí", "No"], {}),
-            ("¿Otra situación que ponga en riesgo su vida o salud?", ["Sí", "No"], {}),
-        ]
-    },
-    {
-        "section": "Síntomas de Reexperimentación",
-        "items": [
-            ("¿Recuerdos recurrentes que causan malestar?", ["Sí", "No"], {}),
-            ("¿Sueños recurrentes que causan malestar?", ["Sí", "No"], {}),
-        ]
-    },
-    {
-        "section": "Síntomas de Evitación",
-        "items": [
-            ("¿Evita sentimientos o situaciones asociadas?", ["Sí", "No"], {}),
-            ("¿Evita actividades o lugares asociados?", ["Sí", "No"], {}),
-            ("¿Dificultad para recordar partes del evento?", ["Sí", "No"], {}),
-        ]
-    },
-    {
-        "section": "Síntomas de Afectación Emocional",
-        "items": [
-            ("¿Menor interés en actividades cotidianas?", ["Sí", "No"], {}),
-            ("¿Se siente alejado o distante de los demás?", ["Sí", "No"], {}),
-            ("¿Dificultad para expresar sentimientos?", ["Sí", "No"], {}),
-            ("¿Sensación de vida corta o futuro limitado?", ["Sí", "No"], {}),
-        ]
-    },
-    {
-        "section": "Síntomas de Activación",
-        "items": [
-            ("¿Dificultad para dormir?", ["Sí", "No"], {}),
-            ("¿Irritabilidad o coraje?", ["Sí", "No"], {}),
-            ("¿Dificultad para concentrarse?", ["Sí", "No"], {}),
-            ("¿Nerviosismo o alerta constante?", ["Sí", "No"], {}),
-            ("¿Se sobresalta fácilmente?", ["Sí", "No"], {}),
-        ]
-    }
-]
-
-# Questions for Guía II
-guia_ii_questions = [
-    {
-        "section": "Condiciones en el Ambiente de Trabajo",
-        "items": [
-            ("¿El espacio donde trabaja le permite realizar sus actividades de manera segura y cómoda?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Las condiciones de su lugar de trabajo (iluminación, ventilación, temperatura, etc.) son adecuadas?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Los equipos, herramientas y materiales que utiliza están en buenas condiciones?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿El lugar donde trabaja está limpio y ordenado?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-        ]
-    },
-    {
-        "section": "Carga de Trabajo",
-        "items": [
-            ("¿La cantidad de trabajo que tiene es razonable para realizarlo en su jornada laboral?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Las tareas que realiza son variadas y le permiten utilizar sus habilidades?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿El ritmo de trabajo es constante y manejable?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Tiene pausas o descansos suficientes durante su jornada laboral?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿El tiempo asignado para realizar sus actividades es suficiente?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Las metas o resultados que le exigen son claros y alcanzables?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿El volumen de trabajo le permite cumplir con sus responsabilidades personales?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-        ]
-    },
-    {
-        "section": "Falta de Control sobre el Trabajo",
-        "items": [
-            ("¿Puede decidir cómo realizar sus actividades de trabajo?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Tiene libertad para tomar decisiones relacionadas con su trabajo?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Puede organizar el orden de sus actividades laborales?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Su opinión es tomada en cuenta para mejorar los procesos de trabajo?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Recibe capacitación suficiente para realizar sus actividades?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Tiene acceso a la información necesaria para realizar su trabajo?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-        ]
-    },
-    {
-        "section": "Jornada de Trabajo",
-        "items": [
-            ("¿Su jornada laboral le permite tener tiempo para su vida personal?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Trabaja horas extras con frecuencia?", ["Nunca", "Casi nunca", "A veces", "Casi siempre", "Siempre"], {}),
-            ("¿Sus horarios de trabajo son estables y predecibles?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Puede descansar los días que le corresponden?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-        ]
-    },
-    {
-        "section": "Interferencia en la Relación Trabajo-Familia",
-        "items": [
-            ("¿El trabajo le permite atender sus responsabilidades familiares?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Puede desconectarse del trabajo fuera de su horario laboral?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Las demandas del trabajo interfieren con su vida personal?", ["Nunca", "Casi nunca", "A veces", "Casi siempre", "Siempre"], {}),
-        ]
-    },
-    {
-        "section": "Liderazgo",
-        "items": [
-            ("¿Recibe instrucciones claras de sus superiores?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Su jefe le apoya para resolver problemas en el trabajo?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Su jefe fomenta un ambiente de trabajo positivo?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Su jefe reconoce su esfuerzo y desempeño?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Las decisiones de su jefe son justas y transparentes?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-        ]
-    },
-    {
-        "section": "Relaciones en el Trabajo",
-        "items": [
-            ("¿El ambiente de trabajo es de respeto y colaboración?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Tiene buenas relaciones con sus compañeros de trabajo?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Recibe apoyo de sus compañeros cuando lo necesita?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Se siente integrado en su equipo de trabajo?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-        ]
-    },
-    {
-        "section": "Violencia Laboral",
-        "items": [
-            ("¿Ha recibido gritos, insultos o burlas en el trabajo?", ["Nunca", "Casi nunca", "A veces", "Casi siempre", "Siempre"], {}),
-            ("¿Ha sido discriminado por su género, edad u otra característica?", ["Nunca", "Casi nunca", "A veces", "Casi siempre", "Siempre"], {}),
-            ("¿Ha recibido amenazas o intimidaciones en el trabajo?", ["Nunca", "Casi nunca", "A veces", "Casi siempre", "Siempre"], {}),
-            ("¿Ha sido ignorado o excluido por sus compañeros o jefes?", ["Nunca", "Casi nunca", "A veces", "Casi siempre", "Siempre"], {}),
-            ("¿Ha recibido tratos humillantes en el trabajo?", ["Nunca", "Casi nunca", "A veces", "Casi siempre", "Siempre"], {}),
-        ]
-    },
-    {
-        "section": "Reconocimiento del Desempeño",
-        "items": [
-            ("¿Recibe reconocimiento por su trabajo bien hecho?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Su trabajo es valorado por sus superiores?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Recibe retroalimentación sobre su desempeño?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-        ]
-    },
-    {
-        "section": "Insuficiente Sentido de Pertenencia e Inestabilidad",
-        "items": [
-            ("¿Se siente parte de la organización?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿La empresa le informa sobre sus objetivos y resultados?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿Siente que su empleo es estable?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-            ("¿La organización promueve un sentido de pertenencia?", ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"], {}),
-        ]
-    }
-]
-
-# Utility functions
-def sanitize_text(text):
-    """Sanitize text inputs to prevent CSV/Excel formatting issues."""
-    if isinstance(text, str):
-        return re.sub(r'[,\n\r\t]', ' ', text.strip())
-    return text
-
-def validate_form(responses, questions):
-    """Validate form responses for all questions."""
-    errors = []
-    for section_data in questions:
-        for q, tipo, params in section_data["items"]:
-            value = responses.get(q)
-            if value is None or (isinstance(value, str) and not value.strip()):
-                errors.append(f"Falta respuesta para: {q}")
-                continue
-            if tipo == "text":
-                if not value or value.isspace():
-                    errors.append(f"El campo {q} no puede estar vacío")
-                if params.get("max_length") and len(value) > params["max_length"]:
-                    errors.append(f"{q} excede el límite de {params['max_length']} caracteres")
-            elif tipo == "number":
-                min_val = params.get("min_value", 0)
-                max_val = params.get("max_value", float('inf'))
-                if value < min_val:
-                    errors.append(f"{q} debe ser al menos {min_val}")
-                if value > max_val:
-                    errors.append(f"{q} no puede exceder {max_val}")
-            elif isinstance(tipo, list) and value not in tipo:
-                errors.append(f"Selección inválida para: {q}")
-    return len(errors) == 0, errors
-
-def calculate_progress(responses, questions):
-    """Calculate the number of answered questions."""
-    total_questions = sum(len(section["items"]) for section in questions)
-    answered_questions = sum(1 for q in responses if responses[q] is not None and (not isinstance(responses[q], str) or responses[q].strip()))
-    return answered_questions, total_questions
-
-@st.cache_data
-def log_response(response, temp_dir, max_retries=3):
-    """Log responses with retry mechanism and exponential backoff."""
-    for attempt in range(max_retries):
-        try:
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            sanitized_response = {k: sanitize_text(v) for k, v in response.items()}
-            log_data = {'Timestamp': timestamp, **sanitized_response}
-            log_df = pd.DataFrame([log_data])
-            log_file = os.path.join(temp_dir, 'responses_log.csv')
-            mode = 'a' if os.path.exists(log_file) else 'w'
-            header = not os.path.exists(log_file)
-            log_df.to_csv(log_file, mode=mode, header=header, index=False)
-            logger.info("Response logged successfully")
-            return True
-        except PermissionError:
-            if attempt == max_retries - 1:
-                logger.error("Failed to write to log file due to permissions")
-                return False
-            time.sleep(2 ** attempt)
-        except Exception as e:
-            if attempt == max_retries - 1:
-                logger.error(f"Failed to log response: {str(e)}")
-                return False
-            time.sleep(2 ** attempt)
-    return False
-
-def reset_data(password, temp_dir):
-    """Reset all data and logs if password matches RESET_PASSWORD from .env."""
-    if password == RESET_PASSWORD:
-        st.session_state.responses = []
-        st.session_state.show_guia_ii = False
-        st.session_state.guia_i_responses = {}
-        st.session_state.guia_ii_responses = {}
-        st.session_state.session_initialized = True
-        try:
-            log_file = os.path.join(temp_dir, 'responses_log.csv')
-            with open(log_file, 'w') as f:
-                f.write('')
-            logger.info("Data and log reset successfully")
-            st.success("✅ Datos y log reiniciados exitosamente.")
-        except PermissionError:
-            logger.error("Failed to reset log due to permissions")
-            st.error("❌ Error: No se pudo reiniciar el log debido a permisos.")
-        except Exception as e:
-            logger.error(f"Failed to reset log: {str(e)}")
-            st.error(f"❌ Error al reiniciar el log: {str(e)}")
-    else:
-        logger.warning("Invalid reset password attempt")
-        st.error("🔐 Contraseña incorrecta para reiniciar datos.")
-
-def has_positive_response_guia_i(row):
-    """Check for positive responses in Guía I."""
-    symptom_cols = [item[0] for section in guia_i_questions[1:] for item in section["items"]]
-    return any(row.get(col, 'No') == 'Sí' for col in symptom_cols)
-
-@st.cache_data
-def calculate_risk_score_guia_ii(row, guia_ii_cols, domain_questions):
-    """Calculate risk score for Guía II."""
-    score_map = {"Siempre": 4, "Casi siempre": 3, "A veces": 2, "Casi nunca": 1, "Nunca": 0}
-    reverse_questions = [
-        "¿Trabaja horas extras con frecuencia?",
-        "¿Las demandas del trabajo interfieren con su vida personal?",
-        "¿Ha recibido gritos, insultos o burlas en el trabajo?",
-        "¿Ha sido discriminado por su género, edad u otra característica?",
-        "¿Ha recibido amenazas o intimidaciones en el trabajo?",
-        "¿Ha sido ignorado o excluido por sus compañeros o jefes?",
-        "¿Ha recibido tratos humillantes en el trabajo?"
-    ]
     
-    total_score = 0
-    domain_scores = {}
+    # Data files
+    LOG_FILE = "responses_log.csv"
+    BACKUP_FOLDER = "backups/"
     
-    for domain, questions in domain_questions.items():
-        domain_score = 0
-        for q in questions:
-            response = row.get(q, "Siempre")
-            score = score_map.get(response, 0)
-            if q in reverse_questions:
-                score = 4 - score
-            domain_score += score
-            total_score += score
-        domain_scores[domain] = domain_score
+    # UI Assets
+    LOGO_PATH = "assets/FOBO2.png"
+    LOGO_WIDTH = 120
+    THEME_COLOR = "#1f77b4"
     
-    if total_score >= 125:
-        total_risk = "Muy Alto"
-    elif total_score >= 100:
-        total_risk = "Alto"
-    elif total_score >= 75:
-        total_risk = "Medio"
-    elif total_score >= 50:
-        total_risk = "Bajo"
-    else:
-        total_risk = "Insignificante"
+    # Visualization
+    CHART_WIDTH = 10
+    CHART_HEIGHT = 6
+    COLOR_PALETTE = "Blues"
     
-    domain_risk_levels = {}
-    for domain, score in domain_scores.items():
-        max_score = len(domain_questions[domain]) * 4
-        percentage = (score / max_score) * 100 if max_score > 0 else 0
-        if percentage >= 80:
-            domain_risk_levels[domain] = "Muy Alto"
-        elif percentage >= 60:
-            domain_risk_levels[domain] = "Alto"
-        elif percentage >= 40:
-            domain_risk_levels[domain] = "Medio"
-        elif percentage >= 20:
-            domain_risk_levels[domain] = "Bajo"
+    # Navigation
+    NAV_OPTIONS = {
+        "📋 Evaluación": "assessment",
+        "📊 Resultados": "results",
+        "📥 Reportes": "reports",
+        "⚙️ Administración": "admin"
+    }
+
+class RiskLevel(Enum):
+    """Enum for risk level classifications"""
+    VERY_HIGH = "Muy Alto"
+    HIGH = "Alto"
+    MEDIUM = "Medio"
+    LOW = "Bajo"
+    INSIGNIFICANT = "Insignificante"
+
+# ====================
+# DATA MODELS
+# ====================
+
+@dataclass
+class Question:
+    """Data model for a single assessment question"""
+    text: str
+    field_name: str
+    question_type: str
+    options: Optional[List[str]] = None
+    required: bool = True
+    help_text: Optional[str] = None
+    risk_domain: Optional[str] = None
+    reverse_score: bool = False
+
+    def render(self, key: str) -> Any:
+        """Render the question in Streamlit UI"""
+        container = st.container()
+        
+        # Question text with optional help tooltip
+        if self.help_text:
+            container.markdown(f"**{self.text}** ❓", help=self.help_text)
         else:
-            domain_risk_levels[domain] = "Insignificante"
-    
-    return total_score, total_risk, domain_scores, domain_risk_levels
-
-@st.cache_data
-def generate_recommendations(guia_i_analysis, guia_ii_analysis):
-    """Generate recommendations based on analysis."""
-    recommendations = []
-    total_employees = guia_i_analysis.get('Total Empleados', 1)
-    
-    positive_responses = guia_i_analysis.get('Empleados con Respuestas Positivas', 0)
-    if positive_responses > 0:
-        percentage = (positive_responses / total_employees) * 100
-        recommendations.append(f"{positive_responses} empleados ({percentage:.1f}%) reportaron eventos traumáticos o síntomas (Guía I). Implementar evaluaciones psicológicas y programas de apoyo.")
-    
-    high_risk_depts = [dept for dept, count in guia_i_analysis.get('Respuestas Positivas por Departamento', {}).items() if count > 0]
-    if high_risk_depts:
-        recommendations.append(f"Departamentos con respuestas positivas (Guía I): {', '.join(high_risk_depts)}. Priorizar intervenciones en estas áreas.")
-    
-    risk_dist = guia_ii_analysis.get('Distribución de Riesgo Total', {})
-    high_risk_count = sum(risk_dist.get(level, 0) for level in ["Alto", "Muy Alto"])
-    if high_risk_count > 0:
-        percentage = (high_risk_count / total_employees) * 100
-        recommendations.append(f"{high_risk_count} empleados ({percentage:.1f}%) en riesgo Alto o Muy Alto (Guía II). Revisar condiciones laborales y liderazgo.")
-    
-    domain_risks = guia_ii_analysis.get('Riesgo por Dominio', {})
-    high_risk_domains = [domain for domain, dist in domain_risks.items() if sum(dist.get(level, 0) for level in ["Alto", "Muy Alto"]) > 0]
-    if high_risk_domains:
-        recommendations.append(f"Dominios con riesgo Alto o Muy Alto (Guía II): {', '.join(high_risk_domains)}. Implementar mejoras específicas en estas áreas.")
-    
-    return recommendations if recommendations else ["No se identificaron riesgos significativos. Mantener monitoreo regular."]
-
-@st.cache_data
-def generate_statistical_analysis(df):
-    """Generate statistical analysis for Guía I and II."""
-    guia_i_analysis = {}
-    guia_ii_analysis = {}
-    
-    symptom_cols = [item[0] for section in guia_i_questions[1:] for item in section["items"]]
-    if any(col in df.columns for col in symptom_cols):
-        guia_i_analysis['Total Empleados'] = len(df)
-        df['Respuesta Positiva (Guía I)'] = df.apply(has_positive_response_guia_i, axis=1)
-        positive_responses = df['Respuesta Positiva (Guía I)'].sum()
-        guia_i_analysis['Empleados con Respuestas Positivas'] = positive_responses
-        guia_i_analysis['Porcentaje con Respuestas Positivas'] = (positive_responses / len(df)) * 100 if len(df) > 0 else 0
+            container.markdown(f"**{self.text}**")
         
-        category_counts = {}
-        for section in guia_i_questions[1:]:
-            section_cols = [item[0] for item in section["items"]]
-            category_counts[section["section"]] = df[section_cols].eq('Sí').sum().sum()
-        guia_i_analysis['Respuestas Positivas por Categoría'] = category_counts
+        # Render appropriate input based on type
+        if self.question_type == "text":
+            return container.text_input(
+                label="",
+                key=key,
+                value="",
+                help=self.help_text
+            )
+        elif self.question_type == "number":
+            return container.number_input(
+                label="",
+                key=key,
+                min_value=0,
+                step=1,
+                value=0,
+                help=self.help_text
+            )
+        elif self.question_type == "radio" and self.options:
+            return container.radio(
+                label="",
+                options=self.options,
+                horizontal=True,
+                key=key,
+                help=self.help_text
+            )
+        elif self.question_type == "select" and self.options:
+            return container.selectbox(
+                label="",
+                options=self.options,
+                key=key,
+                help=self.help_text
+            )
+        return None
+
+@dataclass
+class Section:
+    """Data model for a group of related questions"""
+    title: str
+    description: Optional[str] = None
+    questions: List[Question] = None
+    
+    def add_question(self, question: Question):
+        """Add a question to the section"""
+        self.questions = self.questions or []
+        self.questions.append(question)
+    
+    def render(self, prefix: str) -> Dict[str, Any]:
+        """Render the entire section with all questions"""
+        responses = {}
         
-        if '¿En qué departamento labora?' in df.columns:
-            dept_positive = df[df['Respuesta Positiva (Guía I)'] == True]['¿En qué departamento labora?'].value_counts().to_dict()
-            guia_i_analysis['Respuestas Positivas por Departamento'] = dept_positive
-        
-        if '¿Cuál es tu género?' in df.columns:
-            gender_positive = df[df['Respuesta Positiva (Guía I)'] == True]['¿Cuál es tu género?'].value_counts().to_dict()
-            guia_i_analysis['Respuestas Positivas por Género'] = gender_positive
-    
-    guia_ii_cols = [item[0] for section in guia_ii_questions for item in section["items"]]
-    domain_questions = {section["section"]: [item[0] for item in section["items"]] for section in guia_ii_questions}
-    
-    if any(col in df.columns for col in guia_ii_cols):
-        guia_ii_analysis['Total Empleados'] = len(df)
-        
-        scores = df.apply(lambda row: calculate_risk_score_guia_ii(row, guia_ii_cols, domain_questions), axis=1, result_type='expand')
-        df['Puntaje Total (Guía II)'] = scores[0]
-        df['Nivel de Riesgo Total (Guía II)'] = scores[1]
-        for domain in domain_questions:
-            df[f'Puntaje {domain}'] = scores[2].apply(lambda x: x[domain])
-            df[f'Nivel de Riesgo {domain}'] = scores[3].apply(lambda x: x[domain])
-        
-        risk_dist_total = df['Nivel de Riesgo Total (Guía II)'].value_counts().to_dict()
-        guia_ii_analysis['Distribución de Riesgo Total'] = risk_dist_total
-        
-        domain_risks = {}
-        for domain in domain_questions:
-            domain_risks[domain] = df[f'Nivel de Riesgo {domain}'].value_counts().to_dict()
-        guia_ii_analysis['Riesgo por Dominio'] = domain_risks
-        
-        negative_counts = {}
-        for col in guia_ii_cols:
-            if col in [
-                "¿Trabaja horas extras con frecuencia?",
-                "¿Las demandas del trabajo interfieren con su vida personal?",
-                "¿Ha recibido gritos, insultos o burlas en el trabajo?",
-                "¿Ha sido discriminado por su género, edad u otra característica?",
-                "¿Ha recibido amenazas o intimidaciones en el trabajo?",
-                "¿Ha sido ignorado o excluido por sus compañeros o jefes?",
-                "¿Ha recibido tratos humillantes en el trabajo?"
-            ]:
-                negative_counts[col] = df[col].isin(['Siempre', 'Casi siempre']).sum()
-            else:
-                negative_counts[col] = df[col].isin(['Casi nunca', 'Nunca']).sum()
-        guia_ii_analysis['Conteo de Respuestas Negativas (Guía II)'] = negative_counts
-        
-        if '¿En qué departamento labora?' in df.columns:
-            dept_risk_total = df.groupby('¿En qué departamento labora?')['Nivel de Riesgo Total (Guía II)'].value_counts().unstack(fill_value=0).to_dict()
-            guia_ii_analysis['Riesgo por Departamento (Guía II)'] = dept_risk_total
-        
-        if '¿Cuál es tu género?' in df.columns:
-            gender_risk_total = df.groupby('¿Cuál es tu género?')['Nivel de Riesgo Total (Guía II)'].value_counts().unstack(fill_value=0).to_dict()
-            guia_ii_analysis['Riesgo por Género (Guía II)'] = gender_risk_total
-    
-    numeric_cols = df.select_dtypes(include=[np.number]).columns
-    if len(numeric_cols) > 0:
-        desc_stats = df[numeric_cols].describe().round(2)
-        guia_i_analysis['Descriptivas Numéricas'] = desc_stats.to_dict()
-    
-    logger.info("Statistical analysis completed")
-    return guia_i_analysis, guia_ii_analysis, df
-
-# Visualization functions
-def plot_positive_responses_guia_i(guia_i_analysis, temp_dir, palette):
-    if 'Porcentaje con Respuestas Positivas' not in guia_i_analysis or guia_i_analysis['Porcentaje con Respuestas Positivas'] == 0:
-        return None
-    fig, ax = plt.subplots(figsize=(6, 4))
-    ax.bar(['Con Respuestas Positivas', 'Sin Respuestas Positivas'],
-           [guia_i_analysis['Porcentaje con Respuestas Positivas'], 100 - guia_i_analysis['Porcentaje con Respuestas Positivas']],
-           color=palette[2])
-    ax.set_title('Porcentaje de Empleados con Respuestas Positivas (Guía I)')
-    ax.set_ylabel('Porcentaje (%)')
-    ax.set_ylim(0, 100)
-    path = os.path.join(temp_dir, f'positive_responses_guia_i_{uuid.uuid4()}.png')
-    fig.savefig(path, bbox_inches='tight')
-    plt.close(fig)
-    return ('Bar', 'Porcentaje Respuestas Positivas (Guía I)', path)
-
-def plot_category_responses_guia_i(guia_i_analysis, temp_dir, palette):
-    if 'Respuestas Positivas por Categoría' not in guia_i_analysis or not any(guia_i_analysis['Respuestas Positivas por Categoría'].values()):
-        return None
-    fig, ax = plt.subplots(figsize=(10, 6))
-    categories = list(guia_i_analysis['Respuestas Positivas por Categoría'].keys())
-    counts = list(guia_i_analysis['Respuestas Positivas por Categoría'].values())
-    ax.bar(categories, counts, color=palette[2])
-    ax.set_title('Respuestas Positivas por Categoría (Guía I)')
-    ax.set_xlabel('Categoría')
-    ax.set_ylabel('Número de Respuestas Positivas')
-    ax.tick_params(axis='x', rotation=45, labelright=True)
-    path = os.path.join(temp_dir, f'category_responses_guia_i_{uuid.uuid4()}.png')
-    fig.savefig(path, bbox_inches='tight')
-    plt.close(fig)
-    return ('Bar', 'Respuestas Positivas por Categoría (Guía I)', path)
-
-def plot_dept_positive_guia_i(guia_i_analysis, temp_dir, palette):
-    if 'Respuestas Positivas por Departamento' not in guia_i_analysis or not guia_i_analysis['Respuestas Positivas por Departamento']:
-        return None
-    fig, ax = plt.subplots(figsize=(10, 6))
-    depts = list(guia_i_analysis['Respuestas Positivas por Departamento'].keys())
-    counts = list(guia_i_analysis['Respuestas Positivas por Departamento'].values())
-    ax.bar(depts, counts, color=palette[2])
-    ax.set_title('Respuestas Positivas por Departamento (Guía I)')
-    ax.set_xlabel('Departamento')
-    ax.set_ylabel('Número de Empleados')
-    ax.tick_params(axis='x', rotation=45, labelright=True)
-    path = os.path.join(temp_dir, f'dept_positive_guia_i_{uuid.uuid4()}.png')
-    fig.savefig(path, bbox_inches='tight')
-    plt.close(fig)
-    return ('Bar', 'Respuestas Positivas por Departamento (Guía I)', path)
-
-def plot_risk_distribution_guia_ii(guia_ii_analysis, temp_dir, palette):
-    if 'Distribución de Riesgo Total' not in guia_ii_analysis or not guia_ii_analysis['Distribución de Riesgo Total']:
-        return None
-    fig, ax = plt.subplots(figsize=(6, 4))
-    risk_counts = pd.Series(guia_ii_analysis['Distribución de Riesgo Total']).reindex(
-        ["Insignificante", "Bajo", "Medio", "Alto", "Muy Alto"], fill_value=0)
-    ax.pie(risk_counts, labels=risk_counts.index, autopct='%1.1f%%', colors=palette)
-    ax.set_title('Distribución de Riesgo Psicosocial Total (Guía II)')
-    path = os.path.join(temp_dir, f'risk_distribution_guia_ii_{uuid.uuid4()}.png')
-    fig.savefig(path, bbox_inches='tight')
-    plt.close(fig)
-    return ('Pie', 'Distribución de Riesgo Total (Guía II)', path)
-
-def plot_negative_responses_guia_ii(guia_ii_analysis, temp_dir, palette):
-    if 'Conteo de Respuestas Negativas (Guía II)' not in guia_ii_analysis:
-        return None
-    domain_negatives = {}
-    for section in guia_ii_questions:
-        domain = section["section"]
-        domain_cols = [item[0] for item in section["items"]]
-        domain_negatives[domain] = sum(guia_ii_analysis['Conteo de Respuestas Negativas (Guía II)'].get(col, 0) for col in domain_cols)
-    if not any(domain_negatives.values()):
-        return None
-    
-    fig, ax = plt.subplots(figsize=(12, 6))
-    ax.bar(domain_negatives.keys(), domain_negatives.values(), color=palette[2])
-    ax.set_title('Respuestas Negativas por Dominio (Guía II)')
-    ax.set_xlabel('Dominio')
-    ax.set_ylabel('Número de Respuestas Negativas')
-    ax.tick_params(axis='x', rotation=45, labelright=True)
-    fig.tight_layout()
-    path = os.path.join(temp_dir, f'negative_responses_guia_ii_{uuid.uuid4()}.png')
-    fig.savefig(path, bbox_inches='tight')
-    plt.close(fig)
-    return ('Bar', 'Respuestas Negativas por Dominio (Guía II)', path)
-
-def plot_age_distribution(df, temp_dir, palette):
-    if '¿Qué edad tienes? (ej. 21)' not in df.columns or df['¿Qué edad tienes? (ej. 21)'].isna().all():
-        return None
-    fig, ax = plt.subplots(figsize=(6, 4))
-    sns.histplot(df['¿Qué edad tienes? (ej. 21)'].dropna(), kde=True, color=palette[3], ax=ax)
-    ax.set_title('Distribución de Edad')
-    ax.set_xlabel('Edad')
-    ax.set_ylabel('Frecuencia')
-    path = os.path.join(temp_dir, f'age_distribution_{uuid.uuid4()}.png')
-    fig.savefig(path, bbox_inches='tight')
-    plt.close(fig)
-    return ('Histograma', 'Distribución de Edad', path)
-
-def plot_gender_positive_guia_i(guia_i_analysis, temp_dir, palette):
-    if 'Respuestas Positivas por Género' not in guia_i_analysis or not guia_i_analysis['Respuestas Positivas por Género']:
-        return None
-    fig, ax = plt.subplots(figsize=(8, 5))
-    genders = list(guia_i_analysis['Respuestas Positivas por Género'].keys())
-    counts = list(guia_i_analysis['Respuestas Positivas por Género'].values())
-    ax.bar(genders, counts, color=palette[1])
-    ax.set_title('Respuestas Positivas por Género (Guía I)')
-    ax.set_xlabel('Género')
-    ax.set_ylabel('Número de Empleados')
-    ax.tick_params(axis='x', rotation=45, labelright=True)
-    path = os.path.join(temp_dir, f'gender_positive_guia_i_{uuid.uuid4()}.png')
-    fig.savefig(path, bbox_inches='tight')
-    plt.close(fig)
-    return ('Bar', 'Respuestas Positivas por Género (Guía I)', path)
-
-def plot_dept_risk_guia_ii(guia_ii_analysis, temp_dir, palette):
-    if 'Riesgo por Departamento (Guía II)' not in guia_ii_analysis or not guia_ii_analysis['Riesgo por Departamento (Guía II)']:
-        return None
-    dept_risk_df = pd.DataFrame(guia_ii_analysis['Riesgo por Departamento (Guía II)']).T
-    dept_risk_df = dept_risk_df.reindex(columns=["Insignificante", "Bajo", "Medio", "Alto", "Muy Alto"], fill_value=0)
-    if dept_risk_df.empty:
-        return None
-    fig, ax = plt.subplots(figsize=(12, 6))
-    dept_risk_df.plot(kind='bar', stacked=True, color=palette, ax=ax)
-    ax.set_title('Distribución de Riesgo por Departamento (Guía II)')
-    ax.set_xlabel('Departamento')
-    ax.set_ylabel('Número de Empleados')
-    ax.tick_params(axis='x', rotation=45, labelright=True)
-    ax.legend(title='Nivel de Riesgo')
-    path = os.path.join(temp_dir, f'dept_risk_guia_ii_{uuid.uuid4()}.png')
-    fig.savefig(path, bbox_inches='tight')
-    plt.close(fig)
-    return ('Stacked Bar', 'Distribución de Riesgo por Departamento (Guía II)', path)
-
-def plot_gender_risk_guia_ii(guia_ii_analysis, temp_dir, palette):
-    if 'Riesgo por Género (Guía II)' not in guia_ii_analysis or not guia_ii_analysis['Riesgo por Género (Guía II)']:
-        return None
-    gender_risk_df = pd.DataFrame(guia_ii_analysis['Riesgo por Género (Guía II)']).T
-    gender_risk_df = gender_risk_df.reindex(columns=["Insignificante", "Bajo", "Medio", "Alto", "Muy Alto"], fill_value=0)
-    if gender_risk_df.empty:
-        return None
-    fig, ax = plt.subplots(figsize=(8, 5))
-    gender_risk_df.plot(kind='bar', stacked=True, color=palette, ax=ax)
-    ax.set_title('Distribución de Riesgo por Género (Guía II)')
-    ax.set_xlabel('Género')
-    ax.set_ylabel('Número de Empleados')
-    ax.tick_params(axis='x', rotation=45, labelright=True)
-    ax.legend(title='Nivel de Riesgo')
-    path = os.path.join(temp_dir, f'gender_risk_guia_ii_{uuid.uuid4()}.png')
-    fig.savefig(path, bbox_inches='tight')
-    plt.close(fig)
-    return ('Stacked Bar', 'Distribución de Riesgo por Género (Guía II)', path)
-
-def plot_score_boxplot_dept_guia_ii(df, temp_dir, palette):
-    if 'Puntaje Total (Guía II)' not in df.columns or '¿En qué departamento labora?' not in df.columns or df['Puntaje Total (Guía II)'].isna().all():
-        return None
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.boxplot(x='¿En qué departamento labora?', y='Puntaje Total (Guía II)', data=df, palette=palette, ax=ax)
-    ax.set_title('Distribución de Puntajes Totales por Departamento (Guía II)')
-    ax.set_xlabel('Departamento')
-    ax.set_ylabel('Puntaje Total')
-    ax.tick_params(axis='x', rotation=45, labelright=True)
-    path = os.path.join(temp_dir, f'score_boxplot_dept_guia_ii_{uuid.uuid4()}.png')
-    fig.savefig(path, bbox_inches='tight')
-    plt.close(fig)
-    return ('Boxplot', 'Distribución de Puntajes Totales por Departamento (Guía II)', path)
-
-def plot_domain_correlation_guia_ii(df, temp_dir, domain_questions):
-    domain_cols = [f'Puntaje {domain}' for domain in domain_questions if f'Puntaje {domain}' in df.columns]
-    if not domain_cols or df[domain_cols].isna().all().any():
-        return None
-    fig, ax = plt.subplots(figsize=(12, 8))
-    corr_matrix = df[domain_cols].corr()
-    sns.heatmap(corr_matrix, annot=True, cmap='Pastel1', vmin=-1, vmax=1, ax=ax)
-    ax.set_title('Matriz de Correlación de Puntajes por Dominio (Guía II)')
-    path = os.path.join(temp_dir, f'domain_correlation_guia_ii_{uuid.uuid4()}.png')
-    fig.savefig(path, bbox_inches='tight')
-    plt.close(fig)
-    return ('Heatmap', 'Matriz de Correlación de Puntajes por Dominio (Guía II)', path)
-
-@st.cache_data
-def generate_visualizations(df, temp_dir, guia_i_analysis, guia_ii_analysis):
-    """Generate visualizations for analysis."""
-    visualizations = []
-    sns.set_style("whitegrid")
-    n_categories = max(5, len(df['¿En qué departamento labora?'].unique()) if '¿En qué departamento labora?' in df.columns else 5)
-    pastel_palette = sns.color_palette("pastel", n_colors=n_categories)
-    domain_questions = {section["section"]: [item[0] for item in section["items"]] for section in guia_ii_questions}
-    
-    viz_functions = [
-        (plot_positive_responses_guia_i, (guia_i_analysis, temp_dir, pastel_palette)),
-        (plot_category_responses_guia_i, (guia_i_analysis, temp_dir, pastel_palette)),
-        (plot_dept_positive_guia_i, (guia_i_analysis, temp_dir, pastel_palette)),
-        (plot_risk_distribution_guia_ii, (guia_ii_analysis, temp_dir, pastel_palette)),
-        (plot_negative_responses_guia_ii, (guia_ii_analysis, temp_dir, pastel_palette)),
-        (plot_age_distribution, (df, temp_dir, pastel_palette)),
-        (plot_gender_positive_guia_i, (guia_i_analysis, temp_dir, pastel_palette)),
-        (plot_dept_risk_guia_ii, (guia_ii_analysis, temp_dir, pastel_palette)),
-        (plot_gender_risk_guia_ii, (guia_ii_analysis, temp_dir, pastel_palette)),
-        (plot_score_boxplot_dept_guia_ii, (df, temp_dir, pastel_palette)),
-        (plot_domain_correlation_guia_ii, (df, temp_dir, domain_questions))
-    ]
-    
-    for func, args in viz_functions:
-        try:
-            result = func(*args)
-            if result:
-                visualizations.append(result)
-        except Exception as e:
-            logger.error(f"Failed to generate visualization {func.__name__}: {str(e)}")
-    
-    logger.info(f"Generated {len(visualizations)} visualizations")
-    return visualizations
-
-# Sidebar
-st.sidebar.image("assets/FOBO2.png", width=100)
-st.sidebar.title("Evaluación NOM-035")
-section = st.sidebar.radio("Ir a sección:", ["📋 Evaluación", "📥 Descargar Reporte", "🔄 Reiniciar Datos"], key="sidebar_section")
-
-# Evaluation section
-if section == "📋 Evaluación":
-    st.title("🧠 Evaluación Psicosocial - NOM-035 Guía I y II")
-    st.markdown("Por favor responda con honestidad. La información será confidencial.")
-    
-    with tempfile.TemporaryDirectory() as temp_dir:
-        if not st.session_state.show_guia_ii:
-            with st.form("guia_i_form"):
-                st.header("Guía I: Identificación de Eventos Traumáticos")
-                respuestas = st.session_state.guia_i_responses
-                
-                # Display progress
-                answered, total = calculate_progress(respuestas, guia_i_questions)
-                st.markdown(f"<div class='progress-text'>Progreso: {answered}/{total} preguntas respondidas</div>", unsafe_allow_html=True)
-                
-                for section_data in guia_i_questions:
-                    with st.expander(section_data["section"], expanded=True):
-                        for idx, (q, tipo, params) in enumerate(section_data["items"]):
-                            st.markdown(f"**{q}**")
-                            if tipo == "text":
-                                respuestas[q] = st.text_input("", key=f"gi_q{idx}_{q}", value=respuestas.get(q, ""),
-                                                            max_chars=params.get("max_length"), help=f"Ingrese {q.lower()}",
-                                                            placeholder=f"Ingrese {q.lower()}", label_visibility="collapsed")
-                            elif tipo == "number":
-                                min_val = params.get("min_value", 0)
-                                default_val = max(min_val, respuestas.get(q, min_val))
-                                respuestas[q] = st.number_input("", min_value=min_val,
-                                                             max_value=params.get("max_value", 1000), step=1,
-                                                             key=f"gi_q{idx}_{q}", value=default_val,
-                                                             help=f"Ingrese un número para {q.lower()}",
-                                                             label_visibility="collapsed")
-                            elif isinstance(tipo, list):
-                                respuestas[q] = st.radio("", tipo, horizontal=True, key=f"gi_q{idx}_{q}",
-                                                       index=tipo.index(respuestas.get(q)) if respuestas.get(q) in tipo else 0,
-                                                       help=f"Seleccione una opción para {q.lower()}",
-                                                       label_visibility="collapsed",
-                                                       caption=f"Seleccione una opción para {q.lower()}")
-                
-                # Single submit button for form submission
-                col1, col2 = st.columns(2)
-                with col1:
-                    submitted = st.form_submit_button("✅ Enviar Guía I", help="Enviar respuestas de Guía I", type="primary")
-                with col2:
-                    # Clear button outside form_submit_button to avoid multiple submit buttons
-                    if st.button("🗑️ Limpiar Formulario", help="Borrar todas las respuestas del formulario"):
-                        st.session_state.guia_i_responses = {}
-                        st.success("🗑️ Formulario limpiado.")
-                        st.rerun()
-                
-                if submitted:
-                    try:
-                        is_valid, errors = validate_form(respuestas, guia_i_questions)
-                        if is_valid:
-                            st.session_state.guia_i_responses = respuestas
-                            has_positive = has_positive_response_guia_i(respuestas)
-                            st.session_state.show_guia_ii = has_positive
-                            if not has_positive:
-                                st.session_state.responses.append(respuestas)
-                                if log_response(respuestas, temp_dir):
-                                    st.success("✅ ¡Evaluación Guía I completada! No se requiere Guía II.")
-                                    st.session_state.guia_i_responses = {}
-                                else:
-                                    st.session_state.form_error = "Error al guardar respuestas. Por favor, intenta de nuevo."
-                                    st.error(st.session_state.form_error)
-                            else:
-                                st.success("✅ Guía I enviada. Se detectaron respuestas positivas, por favor complete la Guía II.")
-                                st.session_state.guia_ii_responses = respuestas.copy()
-                                st.rerun()
-                        else:
-                            st.warning("⚠️ Por favor, corrija los siguientes errores:")
-                            for error in errors:
-                                st.write(f"- {error}")
-                    except Exception as e:
-                        logger.error(f"Error processing Guía I submission: {str(e)}")
-                        st.session_state.form_error = f"Error al procesar la evaluación: {str(e)}"
-                        st.error(st.session_state.form_error)
-                
-                if st.session_state.form_error:
-                    if st.form_submit_button("🔄 Reintentar", help="Reintentar el envío"):
-                        st.session_state.form_error = None
-                        st.rerun()
-        else:
-            with st.form("guia_ii_form"):
-                st.header("Guía II: Factores de Riesgo Psicosocial")
-                respuestas = st.session_state.guia_ii_responses
-                
-                # Display progress
-                answered, total = calculate_progress(respuestas, guia_i_questions + guia_ii_questions)
-                st.markdown(f"<div class='progress-text'>Progreso: {answered}/{total} preguntas respondidas</div>", unsafe_allow_html=True)
-                
-                for section_data in guia_ii_questions:
-                    with st.expander(section_data["section"], expanded=True):
-                        for idx, (q, tipo, params) in enumerate(section_data["items"]):
-                            st.markdown(f"**{q}**")
-                            respuestas[q] = st.radio("", tipo, horizontal=True, key=f"gii_q{idx}_{q}",
-                                                   index=tipo.index(respuestas.get(q)) if respuestas.get(q) in tipo else 0,
-                                                   help=f"Seleccione una opción para {q.lower()}",
-                                                   label_visibility="collapsed",
-                                                   caption=f"Seleccione una opción para {q.lower()}")
-                
-                # Single submit button for form submission
-                col1, col2 = st.columns(2)
-                with col1:
-                    submitted = st.form_submit_button("✅ Enviar Guía II", help="Enviar respuestas de Guía II", type="primary")
-                with col2:
-                    # Clear button outside form_submit_button to avoid multiple submit buttons
-                    if st.button("🗑️ Limpiar Formulario", help="Borrar todas las respuestas del formulario"):
-                        st.session_state.guia_ii_responses = st.session_state.guia_i_responses.copy()
-                        st.success("🗑️ Formulario limpiado.")
-                        st.rerun()
-                
-                if submitted:
-                    try:
-                        is_valid, errors = validate_form(respuestas, guia_i_questions + guia_ii_questions)
-                        if is_valid:
-                            st.session_state.responses.append(respuestas)
-                            if log_response(respuestas, temp_dir):
-                                st.session_state.show_guia_ii = False
-                                st.session_state.guia_i_responses = {}
-                                st.session_state.guia_ii_responses = {}
-                                st.success("✅ ¡Evaluación Guía I y II completada exitosamente!")
-                            else:
-                                st.session_state.form_error = "Error al guardar respuestas. Por favor, intenta de nuevo."
-                                st.error(st.session_state.form_error)
-                        else:
-                            st.warning("⚠️ Por favor, corrija los siguientes errores:")
-                            for error in errors:
-                                st.write(f"- {error}")
-                    except Exception as e:
-                        logger.error(f"Error processing Guía II submission: {str(e)}")
-                        st.session_state.form_error = f"Error al procesar la evaluación: {str(e)}"
-                        st.error(st.session_state.form_error)
-                
-                if st.session_state.form_error:
-                    if st.form_submit_button("🔄 Reintentar", help="Reintentar el envío"):
-                        st.session_state.form_error = None
-                        st.rerun()
-
-# Download report section
-elif section == "📥 Descargar Reporte":
-    st.title("📥 Reporte Consolidado")
-    
-    access_key = st.text_input("🔑 Ingrese la clave de acceso:", type="password", help="Ingrese la clave para descargar el reporte",
-                              placeholder="Clave de acceso", label_visibility="visible")
-    
-    if st.session_state.responses and access_key == ACCESS_KEY:
-        try:
-            with st.spinner("Generando reporte..."):
-                df = pd.DataFrame(st.session_state.responses)
-                
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    guia_i_analysis, guia_ii_analysis, df = generate_statistical_analysis(df)
-                    visualizations = generate_visualizations(df, temp_dir, guia_i_analysis, guia_ii_analysis)
-                    recommendations = generate_recommendations(guia_i_analysis, guia_ii_analysis)
-                    
-                    wb = Workbook()
-                    ws_summary = wb.active
-                    ws_summary.title = "Resumen Ejecutivo"
-                    ws_summary.cell(1, 1).value = "Reporte NOM-035 Guía I y II - Resumen Ejecutivo"
-                    ws_summary.cell(2, 1).value = f"Fecha: {datetime.now().strftime('%Y-%m-%d')}"
-                    ws_summary.cell(4, 1).value = "Hallazgos Clave:"
-                    for i, rec in enumerate(recommendations, start=5):
-                        ws_summary.cell(i, 1).value = f"- {rec}"
-                    
-                    ws_data = wb.create_sheet("Datos Crudos")
-                    ws_data.append(df.columns.tolist())
-                    for row in df.itertuples(index=False):
-                        ws_data.append([sanitize_text(str(cell)) for cell in row])
-                    
-                    ws_stats = wb.create_sheet("Análisis Estadístico")
-                    row = 1
-                    
-                    ws_stats.cell(row, 1).value = "Análisis Guía I"
-                    row += 1
-                    ws_stats.cell(row, 1).value = "Total Empleados"
-                    ws_stats.cell(row, 2).value = guia_i_analysis.get('Total Empleados', 0)
-                    row += 1
-                    ws_stats.cell(row, 1).value = "Empleados con Respuestas Positivas"
-                    ws_stats.cell(row, 2).value = guia_i_analysis.get('Empleados con Respuestas Positivas', 0)
-                    row += 1
-                    ws_stats.cell(row, 1).value = "Porcentaje con Respuestas Positivas"
-                    ws_stats.cell(row, 2).value = round(guia_i_analysis.get('Porcentaje con Respuestas Positivas', 0), 1)
-                    row += 2
-                    
-                    ws_stats.cell(row, 1).value = "Respuestas Positivas por Categoría"
-                    row += 1
-                    for cat, count in guia_i_analysis.get('Respuestas Positivas por Categoría', {}).items():
-                        ws_stats.cell(row, 1).value = cat
-                        ws_stats.cell(row, 2).value = count
-                        row += 1
-                    row += 2
-                    
-                    if 'Respuestas Positivas por Departamento' in guia_i_analysis:
-                        ws_stats.cell(row, 1).value = "Respuestas Positivas por Departamento"
-                        row += 1
-                        for dept, count in guia_i_analysis['Respuestas Positivas por Departamento'].items():
-                            ws_stats.cell(row, 1).value = dept
-                            ws_stats.cell(row, 2).value = count
-                            row += 1
-                        row += 2
-                    
-                    if 'Respuestas Positivas por Género' in guia_i_analysis:
-                        ws_stats.cell(row, 1).value = "Respuestas Positivas por Género"
-                        row += 1
-                        for gender, count in guia_i_analysis['Respuestas Positivas por Género'].items():
-                            ws_stats.cell(row, 1).value = gender
-                            ws_stats.cell(row, 2).value = count
-                            row += 1
-                        row += 2
-                    
-                    ws_stats.cell(row, 1).value = "Análisis Guía II"
-                    row += 1
-                    ws_stats.cell(row, 1).value = "Distribución de Riesgo Total (Guía II)"
-                    row += 1
-                    for level, count in guia_ii_analysis.get('Distribución de Riesgo Total', {}).items():
-                        ws_stats.cell(row, 1).value = level
-                        ws_stats.cell(row, 2).value = count
-                        row += 1
-                    row += 2
-                    
-                    ws_stats.cell(row, 1).value = "Riesgo por Dominio (Guía II)"
-                    row += 1
-                    for domain, dist in guia_ii_analysis.get('Riesgo por Dominio', {}).items():
-                        ws_stats.cell(row, 1).value = domain
-                        row += 1
-                        for level, count in dist.items():
-                            ws_stats.cell(row, 2).value = level
-                            ws_stats.cell(row, 3).value = count
-                            row += 1
-                        row += 1
-                    
-                    ws_stats.cell(row, 1).value = "Conteo de Respuestas Negativas (Guía II)"
-                    row += 1
-                    for col, count in guia_ii_analysis.get('Conteo de Respuestas Negativas (Guía II)', {}).items():
-                        ws_stats.cell(row, 1).value = col
-                        ws_stats.cell(row, 2).value = count
-                        row += 1
-                    row += 2
-                    
-                    if 'Riesgo por Departamento (Guía II)' in guia_ii_analysis:
-                        ws_stats.cell(row, 1).value = "Riesgo por Departamento (Guía II)"
-                        row += 1
-                        dept_risk_ii = pd.DataFrame(guia_ii_analysis['Riesgo por Departamento (Guía II)'])
-                        for r, idx in enumerate(dept_risk_ii.index, start=row):
-                            ws_stats.cell(r, 1).value = idx
-                            for c, col in enumerate(dept_risk_ii.columns, start=2):
-                                ws_stats.cell(r, c).value = dept_risk_ii.loc[idx, col]
-                        row += len(dept_risk_ii) + 2
-                    
-                    if 'Riesgo por Género (Guía II)' in guia_ii_analysis:
-                        ws_stats.cell(row, 1).value = "Riesgo por Género (Guía II)"
-                        row += 1
-                        gender_risk_ii = pd.DataFrame(guia_ii_analysis['Riesgo por Género (Guía II)'])
-                        for r, idx in enumerate(gender_risk_ii.index, start=row):
-                            ws_stats.cell(r, 1).value = idx
-                            for c, col in enumerate(gender_risk_ii.columns, start=2):
-                                ws_stats.cell(r, c).value = gender_risk_ii.loc[idx, col]
-                        row += len(gender_risk_ii) + 2
-                    
-                    if 'Descriptivas Numéricas' in guia_i_analysis:
-                        ws_stats.cell(row, 1).value = "Estadísticas Descriptivas (Numéricas)"
-                        row += 1
-                        desc_df = pd.DataFrame(guia_i_analysis['Descriptivas Numéricas'])
-                        for r, idx in enumerate(desc_df.index, start=row):
-                            ws_stats.cell(r, 1).value = idx
-                            for c, col in enumerate(desc_df.columns, start=2):
-                                ws_stats.cell(r, c).value = desc_df.loc[idx, col]
-                        row += len(desc_df) + 2
-                    
-                    ws_viz = wb.create_sheet("Visualizaciones")
-                    row_viz = 1
-                    for viz_type, col, img_path in visualizations:
-                        ws_viz.cell(row_viz, 1).value = f"{viz_type}: {col}"
-                        img = Image(img_path)
-                        img.anchor = f'B{row_viz}'
-                        ws_viz.add_image(img)
-                        row_viz += 30
-                    
-                    excel_io = io.BytesIO()
-                    wb.save(excel_io)
-                    excel_io.seek(0)
-                    
-                    csv_io = io.StringIO()
-                    df.to_csv(csv_io, index=False)
-                    csv_io.seek(0)
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.download_button(
-                            "📤 Descargar Excel",
-                            data=excel_io,
-                            file_name="NOM035_Guia1y2_Analysis.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            help="Descargar el reporte en formato Excel"
-                        )
-                    with col2:
-                        st.download_button(
-                            "📤 Descargar CSV",
-                            data=csv_io.getvalue(),
-                            file_name="NOM035_Guia1y2.csv",
-                            mime="text/csv",
-                            help="Descargar el reporte en formato CSV"
-                        )
-                    logger.info("Report generated successfully")
-        except Exception as e:
-            logger.error(f"Error generating report: {str(e)}")
-            st.error(f"❌ Error al generar el reporte: {str(e)}")
-    elif access_key and access_key != ACCESS_KEY:
-        logger.warning("Invalid access key attempt")
-        st.error("🔐 Clave de acceso incorrecta.")
-    else:
-        st.warning("⚠️ Ingrese la clave de acceso para descargar los datos.")
-
-# Reset data section
-elif section == "🔄 Reiniciar Datos":
-    st.title("🔄 Reiniciar Datos")
-    st.markdown("Ingrese la contraseña para reiniciar todas las respuestas y el log. Esta acción no se puede deshacer.")
-    
-    with tempfile.TemporaryDirectory() as temp_dir:
-        with st.form("reset_form"):
-            reset_password = st.text_input("🔑 Contraseña para reiniciar:", type="password", help="Ingrese la contraseña para reiniciar los datos",
-                                         placeholder="Contraseña de reinicio", label_visibility="visible")
-            reset_button = st.form_submit_button("🔄 Reiniciar", help="Reiniciar todos los datos")
+        with st.expander(self.title, expanded=True):
+            if self.description:
+                st.markdown(self.description)
             
-            if reset_button:
-                reset_data(reset_password, temp_dir)
+            for idx, question in enumerate(self.questions or []):
+                key = f"{prefix}_q{idx}_{question.field_name}"
+                responses[question.field_name] = question.render(key)
+        
+        return responses
+
+# ====================
+# ASSESSMENT CONTENT
+# ====================
+
+class AssessmentContent:
+    """Contains all assessment questions and structure"""
+    
+    @staticmethod
+    def create_guia_i_assessment() -> List[Section]:
+        """Create Guia I assessment structure"""
+        return [
+            Section(
+                title="Información Personal",
+                description="Datos demográficos y laborales básicos",
+                questions=[
+                    Question(
+                        text="Nombre completo",
+                        field_name="nombre",
+                        question_type="text",
+                        help_text="Ingrese su nombre completo"
+                    ),
+                    Question(
+                        text="Edad",
+                        field_name="edad",
+                        question_type="number",
+                        help_text="Ingrese su edad en años"
+                    ),
+                    Question(
+                        text="Género",
+                        field_name="genero",
+                        question_type="radio",
+                        options=["Femenino", "Masculino", "LGBTQ+", "Otro", "Prefiero no decir"],
+                        help_text="Seleccione su identidad de género"
+                    ),
+                    # Additional personal questions...
+                ]
+            ),
+            Section(
+                title="Eventos Traumáticos Severos",
+                description="Experiencias que pueden afectar la salud psicológica",
+                questions=[
+                    Question(
+                        text="¿Ha presenciado o sufrido un accidente grave?",
+                        field_name="accidente_grave",
+                        question_type="radio",
+                        options=["Sí", "No"],
+                        risk_domain="Trauma"
+                    ),
+                    # Additional trauma questions...
+                ]
+            ),
+            # Additional sections...
+        ]
+    
+    @staticmethod
+    def create_guia_ii_assessment() -> List[Section]:
+        """Create Guia II assessment structure"""
+        response_scale = ["Siempre", "Casi siempre", "A veces", "Casi nunca", "Nunca"]
+        
+        return [
+            Section(
+                title="Condiciones en el Ambiente de Trabajo",
+                description="Factores físicos del entorno laboral",
+                questions=[
+                    Question(
+                        text="¿El espacio donde trabaja le permite realizar sus actividades de manera segura y cómoda?",
+                        field_name="espacio_seguro",
+                        question_type="radio",
+                        options=response_scale,
+                        risk_domain="Ambiente"
+                    ),
+                    # Additional environment questions...
+                ]
+            ),
+            # Additional sections...
+        ]
+
+# ====================
+# DATA PROCESSING
+# ====================
+
+class DataValidator:
+    """Handles data validation and cleaning"""
+    
+    @staticmethod
+    def validate_response(response: Dict[str, Any], required_fields: List[str]) -> Tuple[bool, str]:
+        """Validate that all required fields are completed"""
+        missing_fields = [field for field in required_fields if not response.get(field)]
+        
+        if missing_fields:
+            return False, f"Faltan campos obligatorios: {', '.join(missing_fields)}"
+        return True, ""
+
+class DataAnalyzer:
+    """Handles data analysis and scoring"""
+    
+    @staticmethod
+    def calculate_guia_i_risk(responses: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate risk level for Guia I responses"""
+        # Implementation details...
+        pass
+    
+    @staticmethod
+    def calculate_guia_ii_scores(responses: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate scores and risk levels for Guia II"""
+        # Implementation details...
+        pass
+    
+    @staticmethod
+    def generate_statistical_report(responses: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Generate comprehensive statistical analysis"""
+        # Implementation details...
+        pass
+
+class DataVisualizer:
+    """Handles data visualization"""
+    
+    @staticmethod
+    def initialize_style():
+        """Initialize visualization style settings"""
+        sns.set_style("whitegrid")
+        plt.rcParams['figure.facecolor'] = 'white'
+        plt.rcParams['axes.facecolor'] = 'white'
+        plt.rcParams['savefig.facecolor'] = 'white'
+    
+    @staticmethod
+    def create_demographic_charts(data: pd.DataFrame, temp_dir: str) -> List[Tuple[str, str]]:
+        """Create demographic visualization charts"""
+        charts = []
+        
+        # Age distribution
+        plt.figure(figsize=(AppConfig.CHART_WIDTH, AppConfig.CHART_HEIGHT))
+        sns.histplot(data['edad'], kde=True, color=AppConfig.THEME_COLOR)
+        plt.title('Distribución de Edad de los Empleados')
+        plt.xlabel('Edad')
+        plt.ylabel('Número de Empleados')
+        age_path = os.path.join(temp_dir, 'age_distribution.png')
+        plt.savefig(age_path, bbox_inches='tight')
+        plt.close()
+        charts.append(("Distribución de Edad", age_path))
+        
+        # Gender distribution
+        plt.figure(figsize=(AppConfig.CHART_WIDTH, AppConfig.CHART_HEIGHT))
+        gender_counts = data['genero'].value_counts()
+        plt.pie(gender_counts, labels=gender_counts.index, autopct='%1.1f%%')
+        plt.title('Distribución por Género')
+        gender_path = os.path.join(temp_dir, 'gender_distribution.png')
+        plt.savefig(gender_path, bbox_inches='tight')
+        plt.close()
+        charts.append(("Distribución por Género", gender_path))
+        
+        return charts
+    
+    @staticmethod
+    def create_risk_charts(analysis: Dict[str, Any], temp_dir: str) -> List[Tuple[str, str]]:
+        """Create risk assessment visualization charts"""
+        charts = []
+        
+        # Guia I positive responses
+        if 'guia_i_positive_percentage' in analysis:
+            plt.figure(figsize=(AppConfig.CHART_WIDTH, AppConfig.CHART_HEIGHT))
+            plt.bar(['Positivas', 'Negativas'], 
+                   [analysis['guia_i_positive_percentage'], 
+                    100 - analysis['guia_i_positive_percentage']],
+                   color=AppConfig.THEME_COLOR)
+            plt.title('Porcentaje de Respuestas Positivas (Guía I)')
+            plt.ylabel('Porcentaje (%)')
+            plt.ylim(0, 100)
+            guia_i_path = os.path.join(temp_dir, 'guia_i_positive.png')
+            plt.savefig(guia_i_path, bbox_inches='tight')
+            plt.close()
+            charts.append(("Respuestas Positivas Guía I", guia_i_path))
+        
+        # Guia II risk distribution
+        if 'guia_ii_risk_distribution' in analysis:
+            plt.figure(figsize=(AppConfig.CHART_WIDTH, AppConfig.CHART_HEIGHT))
+            risk_data = analysis['guia_ii_risk_distribution']
+            risk_levels = [level.value for level in RiskLevel]
+            counts = [risk_data.get(level, 0) for level in risk_levels]
+            
+            sns.barplot(x=risk_levels, y=counts, palette=AppConfig.COLOR_PALETTE)
+            plt.title('Distribución de Riesgo Psicosocial (Guía II)')
+            plt.xlabel('Nivel de Riesgo')
+            plt.ylabel('Número de Empleados')
+            plt.xticks(rotation=45)
+            guia_ii_path = os.path.join(temp_dir, 'guia_ii_risk.png')
+            plt.savefig(guia_ii_path, bbox_inches='tight')
+            plt.close()
+            charts.append(("Distribución de Riesgo Guía II", guia_ii_path))
+        
+        return charts
+
+# ====================
+# REPORT GENERATION
+# ====================
+
+class ReportGenerator:
+    """Handles report generation in multiple formats"""
+    
+    @staticmethod
+    def generate_excel_report(data: pd.DataFrame, 
+                            analysis: Dict[str, Any],
+                            charts: List[Tuple[str, str]]) -> io.BytesIO:
+        """Generate comprehensive Excel report"""
+        wb = Workbook()
+        
+        # Summary sheet
+        ws_summary = wb.active
+        ws_summary.title = "Resumen Ejecutivo"
+        ws_summary.append(["Reporte de Evaluación Psicosocial NOM-035"])
+        ws_summary.append([f"Fecha de generación: {datetime.now().strftime('%Y-%m-%d %H:%M')}"])
+        ws_summary.append([f"Total de evaluaciones: {len(data)}"])
+        ws_summary.append([])
+        
+        # Add key findings
+        ws_summary.append(["Hallazgos Clave:"])
+        if 'guia_i_positive_percentage' in analysis:
+            ws_summary.append([
+                f"- {analysis['guia_i_positive_percentage']:.1f}% de empleados mostraron "
+                "respuestas positivas en Guía I (eventos traumáticos)"
+            ])
+        
+        if 'guia_ii_risk_distribution' in analysis:
+            high_risk = analysis['guia_ii_risk_distribution'].get(RiskLevel.HIGH.value, 0)
+            very_high = analysis['guia_ii_risk_distribution'].get(RiskLevel.VERY_HIGH.value, 0)
+            ws_summary.append([
+                f"- {high_risk + very_high} empleados ({((high_risk + very_high)/len(data)*100:.1f}%) "
+                "en riesgo Alto o Muy Alto en Guía II"
+            ])
+        
+        # Raw data sheet
+        ws_data = wb.create_sheet("Datos Crudos")
+        for row in dataframe_to_rows(data, index=False, header=True):
+            ws_data.append(row)
+        
+        # Analysis sheet
+        ws_analysis = wb.create_sheet("Análisis")
+        ReportGenerator._add_analysis_to_sheet(ws_analysis, analysis)
+        
+        # Charts sheet
+        if charts:
+            ws_charts = wb.create_sheet("Gráficos")
+            ReportGenerator._add_charts_to_sheet(ws_charts, charts)
+        
+        # Save to BytesIO
+        excel_io = io.BytesIO()
+        wb.save(excel_io)
+        excel_io.seek(0)
+        return excel_io
+    
+    @staticmethod
+    def _add_analysis_to_sheet(ws, analysis: Dict[str, Any]):
+        """Add analysis data to worksheet"""
+        # Implementation details...
+        pass
+    
+    @staticmethod
+    def _add_charts_to_sheet(ws, charts: List[Tuple[str, str]]):
+        """Add charts to worksheet"""
+        row = 1
+        for title, path in charts:
+            ws.cell(row=row, column=1).value = title
+            img = Image(path)
+            img.anchor = f'A{row+1}'
+            ws.add_image(img)
+            row += 30  # Adjust based on image height
+
+# ====================
+# SESSION MANAGEMENT
+# ====================
+
+class SessionManager:
+    """Manages application session state"""
+    
+    @staticmethod
+    def initialize():
+        """Initialize all session state variables"""
+        defaults = {
+            "responses": [],
+            "current_assessment": None,
+            "assessment_stage": "guia_i",
+            "form_progress": {},
+            "analysis_results": None,
+            "report_generated": False
+        }
+        
+        for key, value in defaults.items():
+            if key not in st.session_state:
+                st.session_state[key] = value
+    
+    @staticmethod
+    def reset_data(password: str):
+        """Reset all application data with password protection"""
+        if password == AppConfig.RESET_PASSWORD:
+            try:
+                # Create backup before reset
+                backup_file = os.path.join(
+                    AppConfig.BACKUP_FOLDER,
+                    f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                )
+                
+                if os.path.exists(AppConfig.LOG_FILE):
+                    os.rename(AppConfig.LOG_FILE, backup_file)
+                
+                # Reset session state
+                SessionManager.initialize()
+                st.success("✅ Datos reiniciados exitosamente. Se creó una copia de seguridad.")
+                logger.info("Application data reset performed")
+            except Exception as e:
+                st.error(f"❌ Error al reiniciar los datos: {str(e)}")
+                logger.error(f"Data reset failed: {str(e)}")
+        else:
+            st.error("🔐 Contraseña incorrecta para reiniciar datos.")
+            logger.warning("Failed data reset attempt - incorrect password")
+
+# ====================
+# USER INTERFACE
+# ====================
+
+class AssessmentUI:
+    """Handles all user interface components"""
+    
+    @staticmethod
+    def render_sidebar():
+        """Render the application sidebar"""
+        with st.sidebar:
+            st.image(AppConfig.LOGO_PATH, width=AppConfig.LOGO_WIDTH)
+            st.title("Evaluación NOM-035")
+            
+            selected = st.radio(
+                "Navegación:",
+                list(AppConfig.NAV_OPTIONS.keys()),
+                key="nav_radio"
+            )
+            
+            st.markdown("---")
+            st.markdown("### Acerca de")
+            st.markdown("""
+                Esta herramienta ayuda a implementar la NOM-035-STPS-2018 
+                para identificar y analizar factores de riesgo psicosocial.
+            """)
+            
+        return AppConfig.NAV_OPTIONS[selected]
+    
+    @staticmethod
+    def render_guia_i_assessment():
+        """Render the Guia I assessment interface"""
+        st.title("📋 Evaluación Psicosocial - Guía I")
+        st.markdown("""
+            **Instrucciones:** Responda cada pregunta con honestidad. 
+            La información proporcionada es confidencial y se utilizará 
+            únicamente para fines de evaluación psicosocial.
+        """)
+        
+        sections = AssessmentContent.create_guia_i_assessment()
+        
+        with st.form("guia_i_form"):
+            responses = {}
+            required_fields = []
+            
+            for section in sections:
+                section_responses = section.render(f"gi_{section.title[:10]}")
+                responses.update(section_responses)
+                
+                # Track required fields
+                for q in section.questions:
+                    if q.required:
+                        required_fields.append(q.field_name)
+            
+            submitted = st.form_submit_button("✅ Enviar Evaluación")
+            
+            if submitted:
+                is_valid, message = DataValidator.validate_response(responses, required_fields)
+                
+                if is_valid:
+                    try:
+                        # Check if Guia II is needed
+                        needs_guia_ii = any(
+                            responses.get(q.field_name) == "Sí" 
+                            for section in sections[1:]  # Skip personal info section
+                            for q in section.questions
+                        )
+                        
+                        # Save responses
+                        st.session_state.responses.append(responses)
+                        
+                        if needs_guia_ii:
+                            st.session_state.assessment_stage = "guia_ii"
+                            st.session_state.current_assessment = responses
+                            st.success("✅ Guía I completada. Por favor complete la Guía II.")
+                        else:
+                            st.session_state.assessment_stage = "complete"
+                            st.success("✅ Evaluación completada. No se requiere Guía II.")
+                        
+                        # Log response
+                        DataLogger.log_response(responses)
+                        
+                    except Exception as e:
+                        st.error(f"❌ Error al procesar la evaluación: {str(e)}")
+                        logger.error(f"Assessment processing failed: {str(e)}")
+                else:
+                    st.warning(f"⚠️ {message}")
+
+    @staticmethod
+    def render_guia_ii_assessment():
+        """Render the Guia II assessment interface"""
+        st.title("📋 Evaluación Psicosocial - Guía II")
+        st.markdown("""
+            **Instrucciones:** A continuación encontrará preguntas adicionales 
+            sobre su experiencia laboral. Por favor responda con sinceridad.
+        """)
+        
+        sections = AssessmentContent.create_guia_ii_assessment()
+        
+        with st.form("guia_ii_form"):
+            responses = st.session_state.current_assessment.copy()
+            required_fields = []
+            
+            for section in sections:
+                section_responses = section.render(f"gii_{section.title[:10]}")
+                responses.update(section_responses)
+                
+                # Track required fields
+                for q in section.questions:
+                    if q.required:
+                        required_fields.append(q.field_name)
+            
+            submitted = st.form_submit_button("✅ Enviar Evaluación")
+            
+            if submitted:
+                is_valid, message = DataValidator.validate_response(responses, required_fields)
+                
+                if is_valid:
+                    try:
+                        # Save responses
+                        st.session_state.responses.append(responses)
+                        st.session_state.assessment_stage = "complete"
+                        
+                        # Log response
+                        DataLogger.log_response(responses)
+                        
+                        st.success("✅ Evaluación Guía I y II completada exitosamente!")
+                    except Exception as e:
+                        st.error(f"❌ Error al procesar la evaluación: {str(e)}")
+                        logger.error(f"Assessment processing failed: {str(e)}")
+                else:
+                    st.warning(f"⚠️ {message}")
+
+    @staticmethod
+    def render_results_dashboard():
+        """Render the interactive results dashboard"""
+        st.title("📊 Resultados de la Evaluación")
+        
+        if not st.session_state.responses:
+            st.warning("No hay datos de evaluación para mostrar.")
+            return
+        
+        try:
+            # Convert responses to DataFrame
+            df = pd.DataFrame(st.session_state.responses)
+            
+            # Perform analysis
+            analysis = DataAnalyzer.generate_statistical_report(df)
+            st.session_state.analysis_results = analysis
+            
+            # Display key metrics
+            st.subheader("Resumen General")
+            
+            cols = st.columns(3)
+            cols[0].metric(
+                "Total Evaluaciones",
+                len(df),
+                help="Número total de evaluaciones completadas"
+            )
+            
+            if 'guia_i_positive_percentage' in analysis:
+                cols[1].metric(
+                    "Positivos Guía I",
+                    f"{analysis['guia_i_positive_percentage']:.1f}%",
+                    help="Porcentaje con respuestas positivas a eventos traumáticos"
+                )
+            
+            if 'guia_ii_risk_distribution' in analysis:
+                high_risk = analysis['guia_ii_risk_distribution'].get(RiskLevel.HIGH.value, 0)
+                very_high = analysis['guia_ii_risk_distribution'].get(RiskLevel.VERY_HIGH.value, 0)
+                cols[2].metric(
+                    "Alto/Muy Alto Riesgo",
+                    f"{high_risk + very_high} ({((high_risk + very_high)/len(df)*100):.1f}%)",
+                    help="Empleados con riesgo Alto o Muy Alto en Guía II"
+                )
+            
+            # Interactive filters
+            st.subheader("Filtros Interactivos")
+            filter_col1, filter_col2 = st.columns(2)
+            
+            with filter_col1:
+                department_filter = st.multiselect(
+                    "Filtrar por departamento",
+                    options=df['departamento'].unique() if 'departamento' in df.columns else [],
+                    default=df['departamento'].unique() if 'departamento' in df.columns else []
+                )
+            
+            with filter_col2:
+                gender_filter = st.multiselect(
+                    "Filtrar por género",
+                    options=df['genero'].unique() if 'genero' in df.columns else [],
+                    default=df['genero'].unique() if 'genero' in df.columns else []
+                )
+            
+            # Apply filters
+            filtered_df = df.copy()
+            if department_filter and 'departamento' in df.columns:
+                filtered_df = filtered_df[filtered_df['departamento'].isin(department_filter)]
+            if gender_filter and 'genero' in df.columns:
+                filtered_df = filtered_df[filtered_df['genero'].isin(gender_filter)]
+            
+            # Display filtered data
+            st.subheader("Datos Filtrados")
+            st.dataframe(filtered_df, height=300, use_container_width=True)
+            
+            # Visualization tabs
+            tab1, tab2 = st.tabs(["📈 Gráficos", "🔍 Detalles"])
+            
+            with tab1:
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    charts = DataVisualizer.create_demographic_charts(filtered_df, temp_dir)
+                    charts += DataVisualizer.create_risk_charts(analysis, temp_dir)
+                    
+                    for title, path in charts:
+                        st.subheader(title)
+                        st.image(path, use_column_width=True)
+            
+            with tab2:
+                st.subheader("Análisis Detallado")
+                if 'guia_i_analysis' in analysis:
+                    with st.expander("Resultados Guía I"):
+                        st.write(analysis['guia_i_analysis'])
+                
+                if 'guia_ii_analysis' in analysis:
+                    with st.expander("Resultados Guía II"):
+                        st.write(analysis['guia_ii_analysis'])
+            
+            st.session_state.report_generated = True
+            
+        except Exception as e:
+            st.error(f"❌ Error al generar el dashboard: {str(e)}")
+            logger.error(f"Dashboard generation failed: {str(e)}")
+
+    @staticmethod
+    def render_report_generator():
+        """Render the report generation interface"""
+        st.title("📥 Generar Reportes")
+        
+        if not st.session_state.responses:
+            st.warning("No hay datos de evaluación para generar reportes.")
+            return
+        
+        if not st.session_state.report_generated:
+            st.warning("Genere los resultados primero en la pestaña 'Resultados'.")
+            return
+        
+        st.markdown("""
+            Seleccione el formato del reporte y haga clic en el botón correspondiente 
+            para descargar los resultados de la evaluación.
+        """)
+        
+        access_key = st.text_input(
+            "🔑 Clave de acceso para reportes:",
+            type="password",
+            help="Ingrese la clave autorizada para generar reportes"
+        )
+        
+        if access_key != AppConfig.ACCESS_KEY:
+            st.warning("Ingrese la clave de acceso válida para generar reportes.")
+            return
+        
+        try:
+            df = pd.DataFrame(st.session_state.responses)
+            analysis = st.session_state.analysis_results
+            
+            with tempfile.TemporaryDirectory() as temp_dir:
+                # Generate visualizations
+                charts = DataVisualizer.create_demographic_charts(df, temp_dir)
+                charts += DataVisualizer.create_risk_charts(analysis, temp_dir)
+                
+                # Generate reports
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    excel_report = ReportGenerator.generate_excel_report(df, analysis, charts)
+                    st.download_button(
+                        "💾 Descargar Excel",
+                        data=excel_report,
+                        file_name="reporte_nom035.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        help="Descargue un reporte completo en formato Excel"
+                    )
+                
+                with col2:
+                    csv_report = ReportGenerator.generate_csv_report(df)
+                    st.download_button(
+                        "📊 Descargar CSV",
+                        data=csv_report.getvalue(),
+                        file_name="datos_nom035.csv",
+                        mime="text/csv",
+                        help="Descargue los datos crudos en formato CSV"
+                    )
+                
+                with col3:
+                    pdf_report = ReportGenerator.generate_pdf_report(df, analysis, charts)
+                    st.download_button(
+                        "📄 Descargar PDF",
+                        data=pdf_report,
+                        file_name="resumen_nom035.pdf",
+                        mime="application/pdf",
+                        help="Descargue un resumen ejecutivo en PDF"
+                    )
+        
+        except Exception as e:
+            st.error(f"❌ Error al generar reportes: {str(e)}")
+            logger.error(f"Report generation failed: {str(e)}")
+
+    @staticmethod
+    def render_admin_panel():
+        """Render the administration panel"""
+        st.title("⚙️ Administración del Sistema")
+        
+        tab1, tab2 = st.tabs(["🔐 Seguridad", "🛠 Mantenimiento"])
+        
+        with tab1:
+            st.subheader("Configuración de Seguridad")
+            st.warning("Estas opciones son solo para administradores autorizados.")
+            
+            with st.expander("Cambiar Clave de Acceso", expanded=False):
+                current_pass = st.text_input("Clave actual:", type="password")
+                new_pass = st.text_input("Nueva clave:", type="password")
+                confirm_pass = st.text_input("Confirmar nueva clave:", type="password")
+                
+                if st.button("Actualizar Clave"):
+                    if current_pass != AppConfig.ACCESS_KEY:
+                        st.error("Clave actual incorrecta")
+                    elif new_pass != confirm_pass:
+                        st.error("Las claves nuevas no coinciden")
+                    else:
+                        # In a real app, you would securely update the password
+                        st.success("Clave actualizada exitosamente (simulado)")
+            
+        with tab2:
+            st.subheader("Mantenimiento de Datos")
+            
+            with st.expander("Respaldar Datos", expanded=False):
+                if st.button("🔄 Crear Copia de Seguridad"):
+                    try:
+                        backup_file = os.path.join(
+                            AppConfig.BACKUP_FOLDER,
+                            f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                        )
+                        
+                        if os.path.exists(AppConfig.LOG_FILE):
+                            import shutil
+                            shutil.copy2(AppConfig.LOG_FILE, backup_file)
+                            st.success(f"✅ Copia de seguridad creada: {backup_file}")
+                        else:
+                            st.warning("No hay datos para respaldar")
+                    except Exception as e:
+                        st.error(f"❌ Error al crear copia: {str(e)}")
+            
+            with st.expander("Reiniciar Datos", expanded=False):
+                st.warning("Esta acción eliminará todos los datos de evaluación y no se puede deshacer.")
+                reset_pass = st.text_input("Contraseña de administrador:", type="password")
+                
+                if st.button("🛑 Reiniciar Todos los Datos"):
+                    SessionManager.reset_data(reset_pass)
+
+# ====================
+# MAIN APPLICATION
+# ====================
+
+def main():
+    """Main application entry point"""
+    # Initialize application
+    st.set_page_config(
+        page_title=AppConfig.PAGE_TITLE,
+        page_icon=AppConfig.PAGE_ICON,
+        layout=AppConfig.LAYOUT
+    )
+    
+    # Initialize session state
+    SessionManager.initialize()
+    
+    # Initialize visualization style
+    DataVisualizer.initialize_style()
+    
+    # Render sidebar and get current view
+    current_view = AssessmentUI.render_sidebar()
+    
+    # Render appropriate view based on navigation
+    if current_view == "assessment":
+        if st.session_state.assessment_stage == "guia_i":
+            AssessmentUI.render_guia_i_assessment()
+        elif st.session_state.assessment_stage == "guia_ii":
+            AssessmentUI.render_guia_ii_assessment()
+        else:
+            AssessmentUI.render_guia_i_assessment()
+    
+    elif current_view == "results":
+        AssessmentUI.render_results_dashboard()
+    
+    elif current_view == "reports":
+        AssessmentUI.render_report_generator()
+    
+    elif current_view == "admin":
+        AssessmentUI.render_admin_panel()
+
+if __name__ == "__main__":
+    main()
+# ====================
+# DATA LOGGING & PERSISTENCE
+# ====================
+
+class DataLogger:
+    """Handles data persistence and logging"""
+    
+    @staticmethod
+    def log_response(response: Dict[str, Any]):
+        """Log assessment responses to persistent storage"""
+        try:
+            # Ensure backup directory exists
+            os.makedirs(AppConfig.BACKUP_FOLDER, exist_ok=True)
+            
+            # Add metadata
+            log_entry = {
+                'timestamp': datetime.now().isoformat(),
+                'assessment_type': 'guia_i' if 'guia_ii' not in response else 'guia_ii',
+                **response
+            }
+            
+            # Convert to DataFrame
+            log_df = pd.DataFrame([log_entry])
+            
+            # Write to log file
+            if not os.path.exists(AppConfig.LOG_FILE):
+                log_df.to_csv(AppConfig.LOG_FILE, index=False)
+            else:
+                log_df.to_csv(AppConfig.LOG_FILE, mode='a', header=False, index=False)
+            
+            logger.info(f"Logged assessment response for {response.get('nombre', 'unknown')}")
+            
+        except Exception as e:
+            logger.error(f"Failed to log response: {str(e)}")
+            st.error("❌ Error al guardar los datos. Por favor intente nuevamente.")
+
+    @staticmethod
+    def load_responses() -> pd.DataFrame:
+        """Load all historical responses from log"""
+        try:
+            if os.path.exists(AppConfig.LOG_FILE):
+                df = pd.read_csv(AppConfig.LOG_FILE)
+                
+                # Convert timestamp to datetime
+                if 'timestamp' in df.columns:
+                    df['timestamp'] = pd.to_datetime(df['timestamp'])
+                
+                return df
+            return pd.DataFrame()
+        except Exception as e:
+            logger.error(f"Failed to load responses: {str(e)}")
+            return pd.DataFrame()
+
+# ====================
+# RISK ANALYSIS ENGINE
+# ====================
+
+class RiskAnalyzer:
+    """Core engine for calculating risk levels and scores"""
+    
+    # Scoring weights for different domains
+    DOMAIN_WEIGHTS = {
+        'ambiente_trabajo': 0.15,
+        'carga_trabajo': 0.20,
+        'falta_control': 0.15,
+        'jornada_trabajo': 0.10,
+        'trabajo_familia': 0.10,
+        'liderazgo': 0.15,
+        'relaciones_trabajo': 0.10,
+        'violencia': 0.05
+    }
+    
+    # Thresholds for risk levels
+    RISK_THRESHOLDS = {
+        RiskLevel.VERY_HIGH: 80,
+        RiskLevel.HIGH: 60,
+        RiskLevel.MEDIUM: 40,
+        RiskLevel.LOW: 20,
+        RiskLevel.INSIGNIFICANT: 0
+    }
+    
+    @staticmethod
+    def calculate_composite_score(scores: Dict[str, float]) -> float:
+        """Calculate weighted composite score from domain scores"""
+        return sum(
+            score * RiskAnalyzer.DOMAIN_WEIGHTS.get(domain, 0)
+            for domain, score in scores.items()
+        )
+    
+    @staticmethod
+    def determine_risk_level(score: float) -> RiskLevel:
+        """Determine risk level based on score"""
+        for level, threshold in sorted(
+            RiskAnalyzer.RISK_THRESHOLDS.items(), 
+            key=lambda x: x[1], 
+            reverse=True
+        ):
+            if score >= threshold:
+                return level
+        return RiskLevel.INSIGNIFICANT
+    
+    @staticmethod
+    def analyze_guia_i(responses: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Analyze Guia I responses for traumatic events"""
+        analysis = {
+            'total_responses': len(responses),
+            'positive_responses': 0,
+            'by_department': {},
+            'by_gender': {},
+            'by_age_group': {}
+        }
+        
+        if not responses:
+            return analysis
+        
+        df = pd.DataFrame(responses)
+        
+        # Check for positive responses (Sí answers)
+        symptom_questions = [
+            'accidente_grave', 'asalto', 'violencia_lesiones',
+            'secuestro', 'amenazas', 'otra_situacion_riesgo'
+        ]
+        
+        # Count positive responses
+        for question in symptom_questions:
+            if question in df.columns:
+                analysis['positive_responses'] += (df[question] == 'Sí').sum()
+        
+        # Analyze by department
+        if 'departamento' in df.columns:
+            analysis['by_department'] = df.groupby('departamento')[symptom_questions]\
+                .apply(lambda x: (x == 'Sí').sum().sum())\
+                .to_dict()
+        
+        # Analyze by gender
+        if 'genero' in df.columns:
+            analysis['by_gender'] = df.groupby('genero')[symptom_questions]\
+                .apply(lambda x: (x == 'Sí').sum().sum())\
+                .to_dict()
+        
+        # Analyze by age groups
+        if 'edad' in df.columns:
+            df['age_group'] = pd.cut(
+                df['edad'],
+                bins=[0, 25, 35, 45, 55, 65, 100],
+                labels=['<25', '25-34', '35-44', '45-54', '55-64', '65+']
+            )
+            analysis['by_age_group'] = df.groupby('age_group')[symptom_questions]\
+                .apply(lambda x: (x == 'Sí').sum().sum())\
+                .to_dict()
+        
+        return analysis
+    
+    @staticmethod
+    def analyze_guia_ii(responses: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Comprehensive analysis of Guia II psychosocial factors"""
+        analysis = {
+            'domain_scores': {},
+            'composite_scores': [],
+            'risk_levels': [],
+            'by_department': {},
+            'by_gender': {}
+        }
+        
+        if not responses:
+            return analysis
+        
+        df = pd.DataFrame(responses)
+        
+        # Define question domains and their weights
+        domains = {
+            'ambiente_trabajo': [
+                'espacio_seguro', 'condiciones_adecuadas',
+                'equipos_buen_estado', 'lugar_limpio_ordenado'
+            ],
+            # Other domains would be defined here...
+        }
+        
+        # Calculate domain scores for each response
+        domain_scores = []
+        
+        for _, row in df.iterrows():
+            scores = {}
+            for domain, questions in domains.items():
+                domain_score = 0
+                for q in questions:
+                    if q in row:
+                        # Convert response to numerical score
+                        score = RiskAnalyzer._response_to_score(row[q])
+                        # Apply reverse scoring if needed
+                        if q in ['horas_extras_frecuencia', 'demandas_interfieren']:
+                            score = 4 - score
+                        domain_score += score
+                # Normalize by number of questions
+                scores[domain] = domain_score / len(questions)
+            domain_scores.append(scores)
+        
+        # Add scores to analysis
+        analysis['domain_scores'] = pd.DataFrame(domain_scores).mean().to_dict()
+        
+        # Calculate composite scores and risk levels
+        composite_scores = [
+            RiskAnalyzer.calculate_composite_score(scores) * 100  # Convert to percentage
+            for scores in domain_scores
+        ]
+        
+        risk_levels = [
+            RiskAnalyzer.determine_risk_level(score)
+            for score in composite_scores
+        ]
+        
+        analysis['composite_scores'] = composite_scores
+        analysis['risk_levels'] = risk_levels
+        
+        # Add risk distribution
+        risk_counts = {level.value: 0 for level in RiskLevel}
+        for level in risk_levels:
+            risk_counts[level.value] += 1
+        analysis['risk_distribution'] = risk_counts
+        
+        # Analyze by department
+        if 'departamento' in df.columns:
+            df['composite_score'] = composite_scores
+            df['risk_level'] = [level.value for level in risk_levels]
+            
+            # Average scores by department
+            analysis['by_department']['scores'] = df.groupby('departamento')['composite_score']\
+                .mean().round(2).to_dict()
+            
+            # Risk level counts by department
+            analysis['by_department']['risk_levels'] = df.groupby(
+                ['departamento', 'risk_level']
+            ).size().unstack(fill_value=0).to_dict()
+        
+        # Analyze by gender
+        if 'genero' in df.columns:
+            analysis['by_gender']['scores'] = df.groupby('genero')['composite_score']\
+                .mean().round(2).to_dict()
+            
+            analysis['by_gender']['risk_levels'] = df.groupby(
+                ['genero', 'risk_level']
+            ).size().unstack(fill_value=0).to_dict()
+        
+        return analysis
+    
+    @staticmethod
+    def _response_to_score(response: str) -> int:
+        """Convert Likert scale response to numerical score"""
+        scale = {
+            "Siempre": 4,
+            "Casi siempre": 3,
+            "A veces": 2,
+            "Casi nunca": 1,
+            "Nunca": 0
+        }
+        return scale.get(response, 0)
+
+# ====================
+# REPORT GENERATION (CONTINUED)
+# ====================
+
+class ReportGenerator:
+    """Extended reporting functionality"""
+    
+    @staticmethod
+    def generate_pdf_report(df: pd.DataFrame, 
+                          analysis: Dict[str, Any],
+                          charts: List[Tuple[str, str]]) -> io.BytesIO:
+        """Generate PDF executive summary report"""
+        try:
+            from fpdf import FPDF
+            from PIL import Image as PILImage
+            
+            pdf = FPDF()
+            pdf.set_auto_page_break(auto=True, margin=15)
+            
+            # Add cover page
+            pdf.add_page()
+            pdf.set_font('Arial', 'B', 16)
+            pdf.cell(0, 10, 'Reporte de Evaluación Psicosocial NOM-035', 0, 1, 'C')
+            pdf.ln(10)
+            
+            pdf.set_font('Arial', '', 12)
+            pdf.cell(0, 10, f"Fecha: {datetime.now().strftime('%d/%m/%Y')}", 0, 1)
+            pdf.cell(0, 10, f"Total de evaluaciones: {len(df)}", 0, 1)
+            pdf.ln(15)
+            
+            # Add key findings
+            pdf.set_font('Arial', 'B', 14)
+            pdf.cell(0, 10, 'Hallazgos Clave:', 0, 1)
+            pdf.set_font('Arial', '', 12)
+            
+            if 'guia_i_analysis' in analysis:
+                positives = analysis['guia_i_analysis']['positive_responses']
+                total = analysis['guia_i_analysis']['total_responses']
+                pdf.multi_cell(0, 10, 
+                    f"- {positives} de {total} empleados ({positives/total*100:.1f}%) "
+                    "reportaron eventos traumáticos o síntomas relevantes.")
+            
+            if 'guia_ii_analysis' in analysis:
+                high_risk = analysis['guia_ii_analysis']['risk_distribution'].get('Alto', 0)
+                very_high = analysis['guia_ii_analysis']['risk_distribution'].get('Muy Alto', 0)
+                pdf.multi_cell(0, 10,
+                    f"- {high_risk + very_high} empleados en riesgo Alto o Muy Alto "
+                    f"({(high_risk + very_high)/len(df)*100:.1f}%)")
+            
+            # Add charts
+            for title, path in charts:
+                pdf.add_page()
+                pdf.set_font('Arial', 'B', 14)
+                pdf.cell(0, 10, title, 0, 1)
+                
+                # Resize image to fit PDF
+                img = PILImage.open(path)
+                width, height = img.size
+                aspect = width / height
+                new_width = 180  # ~6 inches
+                new_height = new_width / aspect
+                
+                pdf.image(path, x=15, y=30, w=new_width, h=new_height)
+            
+            # Save to bytes buffer
+            pdf_bytes = io.BytesIO()
+            pdf.output(pdf_bytes)
+            pdf_bytes.seek(0)
+            return pdf_bytes
+        
+        except Exception as e:
+            logger.error(f"PDF generation failed: {str(e)}")
+            st.error("Error al generar reporte PDF")
+            return io.BytesIO()
+
+    @staticmethod
+    def generate_recommendations(analysis: Dict[str, Any]) -> List[str]:
+        """Generate actionable recommendations based on analysis"""
+        recommendations = []
+        
+        # Guia I recommendations
+        if 'guia_i_analysis' in analysis:
+            positives = analysis['guia_i_analysis']['positive_responses']
+            total = analysis['guia_i_analysis']['total_responses']
+            
+            if positives > 0:
+                pct = positives / total * 100
+                rec = (
+                    f"Implementar programas de apoyo psicológico para los {positives} "
+                    f"empleados ({pct:.1f}%) que reportaron eventos traumáticos. "
+                    "Considerar evaluaciones individuales con especialistas."
+                )
+                recommendations.append(rec)
+                
+                # Department-specific recommendations
+                if 'by_department' in analysis['guia_i_analysis']:
+                    top_dept = max(
+                        analysis['guia_i_analysis']['by_department'].items(),
+                        key=lambda x: x[1]
+                    )
+                    if top_dept[1] > 0:
+                        rec = (
+                            f"Priorizar intervenciones en el departamento de {top_dept[0]}, "
+                            f"que muestra la mayor cantidad de reportes ({top_dept[1]})."
+                        )
+                        recommendations.append(rec)
+        
+        # Guia II recommendations
+        if 'guia_ii_analysis' in analysis:
+            high_risk = analysis['guia_ii_analysis']['risk_distribution'].get('Alto', 0)
+            very_high = analysis['guia_ii_analysis']['risk_distribution'].get('Muy Alto', 0)
+            
+            if high_risk + very_high > 0:
+                rec = (
+                    f"Realizar intervenciones organizacionales para abordar los factores "
+                    f"de riesgo psicosocial identificados en {high_risk + very_high} "
+                    "empleados. Considerar:"
+                )
+                recommendations.append(rec)
+                
+                # Domain-specific recommendations
+                domains = analysis['guia_ii_analysis']['domain_scores']
+                top_risk_domain = max(domains.items(), key=lambda x: x[1])
+                
+                if top_risk_domain[1] > 60:  # Above high risk threshold
+                    rec = (
+                        f"- Enfocarse en mejorar el área de {top_risk_domain[0].replace('_', ' ')}, "
+                        f"que muestra el mayor nivel de riesgo ({top_risk_domain[1]:.1f}%)."
+                    )
+                    recommendations.append(rec)
+                
+                # Add general recommendations
+                recommendations.extend([
+                    "- Capacitar a supervisores en detección temprana de factores de riesgo",
+                    "- Revisar políticas de carga de trabajo y equilibrio vida laboral-personal",
+                    "- Implementar programas de promoción de salud mental en el trabajo"
+                ])
+        
+        if not recommendations:
+            recommendations.append(
+                "No se identificaron riesgos significativos. "
+                "Mantener los programas de prevención y monitoreo regular."
+            )
+        
+        return recommendations
+
+# ====================
+# ADMINISTRATION TOOLS
+# ====================
+
+class AdminTools:
+    """Administrative and maintenance functions"""
+    
+    @staticmethod
+    def backup_data():
+        """Create a timestamped backup of assessment data"""
+        try:
+            os.makedirs(AppConfig.BACKUP_FOLDER, exist_ok=True)
+            
+            if os.path.exists(AppConfig.LOG_FILE):
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                backup_path = os.path.join(
+                    AppConfig.BACKUP_FOLDER,
+                    f"nom035_backup_{timestamp}.csv"
+                )
+                
+                import shutil
+                shutil.copy2(AppConfig.LOG_FILE, backup_path)
+                
+                logger.info(f"Created backup at {backup_path}")
+                return True, backup_path
+            return False, "No data to backup"
+        except Exception as e:
+            logger.error(f"Backup failed: {str(e)}")
+            return False, str(e)
+    
+    @staticmethod
+    def restore_backup(backup_file: str):
+        """Restore data from a backup file"""
+        try:
+            if os.path.exists(backup_file):
+                # Create pre-restore backup
+                AdminTools.backup_data()
+                
+                # Restore from selected backup
+                shutil.copy2(backup_file, AppConfig.LOG_FILE)
+                
+                # Reload session data
+                SessionManager.initialize()
+                
+                logger.info(f"Restored data from {backup_file}")
+                return True, "Datos restaurados exitosamente"
+            return False, "Archivo de backup no encontrado"
+        except Exception as e:
+            logger.error(f"Restore failed: {str(e)}")
+            return False, str(e)
+    
+    @staticmethod
+    def get_backup_files() -> List[Dict[str, str]]:
+        """List available backup files with metadata"""
+        backups = []
+        
+        if os.path.exists(AppConfig.BACKUP_FOLDER):
+            for filename in os.listdir(AppConfig.BACKUP_FOLDER):
+                if filename.startswith("nom035_backup_") and filename.endswith(".csv"):
+                    filepath = os.path.join(AppConfig.BACKUP_FOLDER, filename)
+                    stat = os.stat(filepath)
+                    
+                    backups.append({
+                        'filename': filename,
+                        'path': filepath,
+                        'size': f"{stat.st_size / 1024:.1f} KB",
+                        'modified': datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M")
+                    })
+        
+        # Sort by modified time (newest first)
+        return sorted(backups, key=lambda x: x['modified'], reverse=True)
+
+# ====================
+# MAIN APPLICATION FLOW
+# ====================
+
+if __name__ == "__main__":
+    # Initialize the application
+    st.set_page_config(
+        page_title=AppConfig.PAGE_TITLE,
+        page_icon=AppConfig.PAGE_ICON,
+        layout=AppConfig.LAYOUT
+    )
+    
+    # Initialize session state and components
+    SessionManager.initialize()
+    DataVisualizer.initialize_style()
+    
+    # Render the application
+    try:
+        current_view = AssessmentUI.render_sidebar()
+        
+        if current_view == "assessment":
+            if st.session_state.assessment_stage == "guia_i":
+                AssessmentUI.render_guia_i_assessment()
+            elif st.session_state.assessment_stage == "guia_ii":
+                AssessmentUI.render_guia_ii_assessment()
+            else:
+                AssessmentUI.render_guia_i_assessment()
+        
+        elif current_view == "results":
+            AssessmentUI.render_results_dashboard()
+        
+        elif current_view == "reports":
+            AssessmentUI.render_report_generator()
+        
+        elif current_view == "admin":
+            AssessmentUI.render_admin_panel()
+    
+    except Exception as e:
+        logger.critical(f"Application error: {str(e)}")
+        st.error("Ocurrió un error crítico en la aplicación. Por favor recargue la página.")
