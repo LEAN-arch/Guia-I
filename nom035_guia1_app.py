@@ -1254,61 +1254,61 @@ elif section == "📥 Descargar Reporte":
                         gender_risk_iv = pd.DataFrame(guia_iv_analysis['Riesgo Salud por Género (Guía IV)'])
                         ws_stats.cell(row, 1).value = "Género"
                         for c, col in enumerate(gender_risk_iv.columns, start=2):
-                    ws_stats.cell(row, c).value = col
-                        row += 1
-                        for r, idx in enumerate(gender_risk_iv.index, start=row):
-                            ws_stats.cell(r, 1).value = idx
-                            for c, col in enumerate(gender_risk_iv.columns, start=2):
-                                ws_stats.cell(r, c).value = gender_risk_iv.loc[idx, col]
-                        row += len(gender_risk_iv) + 2
+                            ws_stats.cell(row, c).value = col
+                            row += 1
+                            for r, idx in enumerate(gender_risk_iv.index, start=row):
+                                ws_stats.cell(r, 1).value = idx
+                                for c, col in enumerate(gender_risk_iv.columns, start=2):
+                                    ws_stats.cell(r, c).value = gender_risk_iv.loc[idx, col]
+                            row += len(gender_risk_iv) + 2
+                        
+                        # Save the workbook
+                        output = io.BytesIO()
+                        wb.save(output)
+                        output.seek(0)
+                        
+                        # Provide download button
+                        st.download_button(
+                            label="📥 Descargar Reporte Excel",
+                            data=output,
+                            file_name=f"Reporte_NOM035_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                        
+                        # Display recommendations
+                        st.subheader("📝 Recomendaciones")
+                        for rec in recommendations:
+                            st.markdown(f"- {rec}")
+                        
+                        # Display visualizations
+                        st.subheader("📊 Visualizaciones")
+                        for vis_type, title, path in visualizations:
+                            st.markdown(f"**{title}**")
+                            if vis_type != 'Text':
+                                st.image(path, use_column_width=True)
+                            else:
+                                st.write(path)
                     
-                    # Save the workbook
-                    output = io.BytesIO()
-                    wb.save(output)
-                    output.seek(0)
-                    
-                    # Provide download button
-                    st.download_button(
-                        label="📥 Descargar Reporte Excel",
-                        data=output,
-                        file_name=f"Reporte_NOM035_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-                    
-                    # Display recommendations
-                    st.subheader("📝 Recomendaciones")
-                    for rec in recommendations:
-                        st.markdown(f"- {rec}")
-                    
-                    # Display visualizations
-                    st.subheader("📊 Visualizaciones")
-                    for vis_type, title, path in visualizations:
-                        st.markdown(f"**{title}**")
-                        if vis_type != 'Text':
-                            st.image(path, use_column_width=True)
-                        else:
-                            st.write(path)
-                
-                except Exception as e:
-                    logger.error(f"Error generating report: {str(e)}")
-                    st.error(f"❌ Error al generar el reporte: {str(e)}")
+                    except Exception as e:
+                        logger.error(f"Error generating report: {str(e)}")
+                        st.error(f"❌ Error al generar el reporte: {str(e)}")
+        
+        elif access_key:
+            st.error("🔐 Clave de acceso incorrecta.")
     
-    elif access_key:
-        st.error("🔐 Clave de acceso incorrecta.")
-
-# Reiniciar Datos
-elif section == "🔄 Reiniciar Datos":
-    st.title("🔄 Reiniciar Datos")
-    st.warning("⚠️ Esta acción eliminará todas las respuestas almacenadas.")
+    # Reiniciar Datos
+    elif section == "🔄 Reiniciar Datos":
+        st.title("🔄 Reiniciar Datos")
+        st.warning("⚠️ Esta acción eliminará todas las respuestas almacenadas.")
+        
+        password = st.text_input("🔑 Ingrese la contraseña para reiniciar:", type="password")
+        if st.button("🗑️ Reiniciar"):
+            reset_data(password)
     
-    password = st.text_input("🔑 Ingrese la contraseña para reiniciar:", type="password")
-    if st.button("🗑️ Reiniciar"):
-        reset_data(password)
-
-
-
-
-
+    
+    
+    
+    
 
 
 
