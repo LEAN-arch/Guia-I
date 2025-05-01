@@ -571,6 +571,7 @@ st.markdown(
 
 # Sidebar
 try:
+    st.sidebar.image("assets/FOBO2.png", width=100)
     lang = st.sidebar.selectbox("Language / Idioma", ["Español", "English"], key="language_selector")
     lang_code = "es" if lang == "Español" else "en"
     t = LANGUAGES[lang_code]
