@@ -110,10 +110,6 @@ if section == "📋 Evaluación":
             except Exception as e:
                 st.error(f"❌ Error al procesar la evaluación: {str(e)}")
 
-    if st.session_state.responses:
-        with st.expander("📊 Ver respuestas anteriores"):
-            st.dataframe(pd.DataFrame(st.session_state.responses), use_container_width=True)
-
 # Reporte Excel/CSV
 if section == "📥 Descargar Reporte":
     st.title("📥 Reporte Consolidado")
