@@ -886,7 +886,7 @@ if section == "📋 Evaluación":
                         for q in ["¿Qué edad tienes? (ej. 21)", "¿Cuántos años llevas trabajando aquí?"]:
                             if q in respuestas and not validate_number(respuestas[q]):
                                 st.warning(f"⚠️ {q}: Por favor ingrese un número entero mayor o igual a 0.")
-                                return
+                                    return
                         response_id = log_response(respuestas)
                         if response_id:
                             st.session_state.guia_i_responses = respuestas
