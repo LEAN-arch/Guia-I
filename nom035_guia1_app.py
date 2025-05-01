@@ -887,26 +887,26 @@ if section == "📋 Evaluación":
                             if q in respuestas and not validate_number(respuestas[q]):
                                 st.warning(f"⚠️ {q}: Por favor ingrese un número entero mayor o igual a 0.")
                     return
-                        response_id = log_response(respuestas)
-                        if response_id:
-                            st.session_state.guia_i_responses = respuestas
-                            st.session_state.response_id = response_id
-                            symptom_cols = [q["items"][0][0] for q in guia_i_questions[1:]]
-                            has_positive = any(respuestas.get(col) == "Sí" for col in symptom_cols)
-                            if has_positive:
-                                st.session_state.current_step = "guia_ii"
-                                st.success("✅ Guía I enviada. Por favor complete la Guía II.")
+                            response_id = log_response(respuestas)
+                            if response_id:
+                                st.session_state.guia_i_responses = respuestas
+                                st.session_state.response_id = response_id
+                                symptom_cols = [q["items"][0][0] for q in guia_i_questions[1:]]
+                                has_positive = any(respuestas.get(col) == "Sí" for col in symptom_cols)
+                                if has_positive:
+                                    st.session_state.current_step = "guia_ii"
+                                    st.success("✅ Guía I enviada. Por favor complete la Guía II.")
+                                else:
+                                    st.session_state.current_step = "guia_i"
+                                    st.session_state.guia_i_responses = None
+                                    st.session_state.response_id = None
+                                    st.success("✅ ¡Evaluación Guía I completada! No se requiere Guía II.")
                             else:
-                                st.session_state.current_step = "guia_i"
-                                st.session_state.guia_i_responses = None
-                                st.session_state.response_id = None
-                                st.success("✅ ¡Evaluación Guía I completada! No se requiere Guía II.")
-                        else:
-                            st.error("❌ Error al guardar la respuesta. Intente nuevamente.")
-                except Exception as e:
-                    logger.error(f"Error processing Guía I: {str(e)}")
-                    st.error(f"❌ Error al procesar la evaluación: {str(e)}")
-    
+                                st.error("❌ Error al guardar la respuesta. Intente nuevamente.")
+                    except Exception as e:
+                        logger.error(f"Error processing Guía I: {str(e)}")
+                        st.error(f"❌ Error al procesar la evaluación: {str(e)}")
+        
     elif st.session_state.current_step == "guia_ii":
         with st.form("guia_ii_form"):
             respuestas = st.session_state.guia_i_responses.copy()
