@@ -50,22 +50,10 @@ st.markdown("""
 .primary-button:hover {
     background-color: #218838;
 }
-.secondary-button {
-    background-color: #6c757d;
-    color: white;
-    border-radius: 5px;
-}
-.secondary-button:hover {
-    background-color: #5a6268;
-}
 .stRadio > div {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-}
-.progress-text {
-    font-size: 16px;
-    margin-bottom: 10px;
 }
 @media (max-width: 600px) {
     .stButton>button {
@@ -88,9 +76,7 @@ def initialize_session_state():
         "responses": [],
         "show_guia_ii": False,
         "guia_i_responses": None,
-        "guia_ii_responses": None,
         "session_initialized": False,
-        "current_section": 0,
         "form_error": None
     }
     for key, value in defaults.items():
@@ -100,8 +86,6 @@ def initialize_session_state():
         st.session_state.responses = []
         st.session_state.show_guia_ii = False
         st.session_state.guia_i_responses = None
-        st.session_state.guia_ii_responses = None
-        st.session_state.current_section = 0
         st.session_state.session_initialized = True
         logger.info("Session state initialized")
 
@@ -276,11 +260,10 @@ def sanitize_text(text):
         return re.sub(r'[,\n\r\t]', ' ', text.strip())
     return text
 
-def validate_form(responses, questions, section_idx=None):
-    """Validate form responses for a specific section or all sections."""
-    sections = [questions[section_idx]] if section_idx is not None else questions
+def validate_form(responses, questions):
+    """Validate form responses for all questions."""
     errors = []
-    for section_data in sections:
+    for section_data in questions:
         for q, tipo, params in section_data["items"]:
             value = responses.get(q)
             if value is None:
@@ -335,8 +318,6 @@ def reset_data(password, temp_dir):
         st.session_state.responses = []
         st.session_state.show_guia_ii = False
         st.session_state.guia_i_responses = None
-        st.session_state.guia_ii_responses = None
-        st.session_state.current_section = 0
         st.session_state.session_initialized = True
         try:
             log_file = os.path.join(temp_dir, 'responses_log.csv')
@@ -749,74 +730,38 @@ if section == "📋 Evaluación":
     with tempfile.TemporaryDirectory() as temp_dir:
         if not st.session_state.show_guia_ii:
             with st.form("guia_i_form"):
+                st.header("Guía I: Identificación de Eventos Traumáticos")
                 respuestas = st.session_state.guia_i_responses or {}
-                total_sections = len(guia_i_questions)
-                current_section = min(st.session_state.current_section, total_sections - 1)
                 
-                # Progress indicator
-                st.markdown(f"<div class='progress-text'>Sección {current_section + 1} de {total_sections}: {guia_i_questions[current_section]['section']}</div>", unsafe_allow_html=True)
-                st.progress(current_section / total_sections)
+                for section_data in guia_i_questions:
+                    st.subheader(section_data["section"])
+                    for idx, (q, tipo, params) in enumerate(section_data["items"]):
+                        st.markdown(f"**{q}**")
+                        if tipo == "text":
+                            respuestas[q] = st.text_input("", key=f"gi_q{idx}_{q}", value=respuestas.get(q, ""),
+                                                        max_chars=params.get("max_length"), help=f"Ingrese {q.lower()}")
+                        elif tipo == "number":
+                            min_val = params.get("min_value", 0)
+                            default_val = max(min_val, respuestas.get(q, min_val))
+                            respuestas[q] = st.number_input("", min_value=min_val,
+                                                         max_value=params.get("max_value", 1000), step=1,
+                                                         key=f"gi_q{idx}_{q}", value=default_val,
+                                                         help=f"Ingrese un número para {q.lower()}")
+                        elif isinstance(tipo, list):
+                            respuestas[q] = st.radio("", tipo, horizontal=True, key=f"gi_q{idx}_{q}",
+                                                   index=tipo.index(respuestas.get(q)) if respuestas.get(q) in tipo else 0,
+                                                   help=f"Seleccione una opción para {q.lower()}",
+                                                   label_visibility="collapsed")
                 
-                section_data = guia_i_questions[current_section]
-                for idx, (q, tipo, params) in enumerate(section_data["items"]):
-                    st.markdown(f"**{q}**")
-                    if tipo == "text":
-                        respuestas[q] = st.text_input("", key=f"gi_q{idx}_{q}", value=respuestas.get(q, ""),
-                                                    max_chars=params.get("max_length"), help=f"Ingrese {q.lower()}")
-                    elif tipo == "number":
-                        min_val = params.get("min_value", 0)
-                        default_val = max(min_val, respuestas.get(q, min_val))
-                        respuestas[q] = st.number_input("", min_value=min_val,
-                                                     max_value=params.get("max_value", 1000), step=1,
-                                                     key=f"gi_q{idx}_{q}", value=default_val,
-                                                     help=f"Ingrese un número para {q.lower()}")
-                    elif isinstance(tipo, list):
-                        respuestas[q] = st.radio("", tipo, horizontal=True, key=f"gi_q{idx}_{q}",
-                                               index=tipo.index(respuestas.get(q)) if respuestas.get(q) in tipo else 0,
-                                               help=f"Seleccione una opción para {q.lower()}",
-                                               label_visibility="collapsed")
+                submit_button = st.form_submit_button("✅ Enviar Guía I", help="Enviar respuestas de Guía I", type="primary")
                 
-                col1, col2, col3 = st.columns([1, 1, 1])
-                with col1:
-                    prev_button = st.form_submit_button("⬅️ Anterior", help="Volver a la sección anterior") if current_section > 0 else None
-                with col2:
-                    if current_section < total_sections - 1:
-                        next_button = st.form_submit_button("➡️ Siguiente", help="Ir a la siguiente sección", type="primary")
-                    else:
-                        submit_button = st.form_submit_button("✅ Enviar Guía I", help="Enviar respuestas de Guía I", type="primary")
-                with col3:
-                    cancel_button = st.form_submit_button("❌ Cancelar", help="Limpiar formulario")
-                
-                if prev_button:
-                    is_valid, errors = validate_form(respuestas, guia_i_questions, current_section)
-                    if is_valid:
-                        st.session_state.guia_i_responses = respuestas
-                        st.session_state.current_section -= 1
-                        st.rerun()
-                    else:
-                        st.warning("⚠️ Corrija los siguientes errores:")
-                        for error in errors:
-                            st.write(f"- {error}")
-                
-                if 'next_button' in locals() and next_button:
-                    is_valid, errors = validate_form(respuestas, guia_i_questions, current_section)
-                    if is_valid:
-                        st.session_state.guia_i_responses = respuestas
-                        st.session_state.current_section += 1
-                        st.rerun()
-                    else:
-                        st.warning("⚠️ Corrija los siguientes errores:")
-                        for error in errors:
-                            st.write(f"- {error}")
-                
-                if 'submit_button' in locals() and submit_button:
+                if submit_button:
                     try:
                         is_valid, errors = validate_form(respuestas, guia_i_questions)
                         if is_valid:
                             st.session_state.guia_i_responses = respuestas
                             has_positive = has_positive_response_guia_i(respuestas)
                             st.session_state.show_guia_ii = has_positive
-                            st.session_state.current_section = 0
                             if not has_positive:
                                 st.session_state.responses.append(respuestas)
                                 if log_response(respuestas, temp_dir):
@@ -827,6 +772,7 @@ if section == "📋 Evaluación":
                                     st.error(st.session_state.form_error)
                             else:
                                 st.success("✅ Guía I enviada. Se detectaron respuestas positivas, por favor complete la Guía II.")
+                                st.rerun()
                         else:
                             st.warning("⚠️ Corrija los siguientes errores:")
                             for error in errors:
@@ -836,73 +782,27 @@ if section == "📋 Evaluación":
                         st.session_state.form_error = str(e)
                         st.error(f"❌ Error al procesar la evaluación: {str(e)}")
                 
-                if cancel_button:
-                    if st.session_state.get("confirm_cancel_guia_i", False):
-                        st.session_state.guia_i_responses = None
-                        st.session_state.current_section = 0
-                        st.session_state.confirm_cancel_guia_i = False
-                        st.success("✅ Formulario de Guía I limpiado.")
-                        st.rerun()
-                    else:
-                        st.session_state.confirm_cancel_guia_i = True
-                        st.warning("⚠️ ¿Está seguro de que desea cancelar? Presione 'Cancelar' nuevamente para confirmar.")
-                
                 if st.session_state.form_error:
                     if st.form_submit_button("🔄 Reintentar", help="Reintentar el envío"):
                         st.session_state.form_error = None
                         st.rerun()
         else:
             with st.form("guia_ii_form"):
+                st.header("Guía II: Factores de Riesgo Psicosocial")
                 respuestas = st.session_state.guia_i_responses.copy() if st.session_state.guia_i_responses else {}
-                total_sections = len(guia_ii_questions)
-                current_section = min(st.session_state.current_section, total_sections - 1)
                 
-                # Progress indicator
-                st.markdown(f"<div class='progress-text'>Sección {current_section + 1} de {total_sections}: {guia_ii_questions[current_section]['section']}</div>", unsafe_allow_html=True)
-                st.progress(current_section / total_sections)
+                for section_data in guia_ii_questions:
+                    st.subheader(section_data["section"])
+                    for idx, (q, tipo, params) in enumerate(section_data["items"]):
+                        st.markdown(f"**{q}**")
+                        respuestas[q] = st.radio("", tipo, horizontal=True, key=f"gii_q{idx}_{q}",
+                                               index=tipo.index(respuestas.get(q)) if respuestas.get(q) in tipo else 0,
+                                               help=f"Seleccione una opción para {q.lower()}",
+                                               label_visibility="collapsed")
                 
-                section_data = guia_ii_questions[current_section]
-                for idx, (q, tipo, params) in enumerate(section_data["items"]):
-                    st.markdown(f"**{q}**")
-                    respuestas[q] = st.radio("", tipo, horizontal=True, key=f"gii_q{idx}_{q}",
-                                           index=tipo.index(respuestas.get(q)) if respuestas.get(q) in tipo else 0,
-                                           help=f"Seleccione una opción para {q.lower()}",
-                                           label_visibility="collapsed")
+                submit_button = st.form_submit_button("✅ Enviar Guía II", help="Enviar respuestas de Guía II", type="primary")
                 
-                col1, col2, col3 = st.columns([1, 1, 1])
-                with col1:
-                    prev_button = st.form_submit_button("⬅️ Anterior", help="Volver a la sección anterior") if current_section > 0 else None
-                with col2:
-                    if current_section < total_sections - 1:
-                        next_button = st.form_submit_button("➡️ Siguiente", help="Ir a la siguiente sección", type="primary")
-                    else:
-                        submit_button = st.form_submit_button("✅ Enviar Guía II", help="Enviar respuestas de Guía II", type="primary")
-                with col3:
-                    cancel_button = st.form_submit_button("❌ Cancelar", help="Limpiar formulario")
-                
-                if prev_button:
-                    is_valid, errors = validate_form(respuestas, guia_ii_questions, current_section)
-                    if is_valid:
-                        st.session_state.guia_i_responses = respuestas
-                        st.session_state.current_section -= 1
-                        st.rerun()
-                    else:
-                        st.warning("⚠️ Corrija los siguientes errores:")
-                        for error in errors:
-                            st.write(f"- {error}")
-                
-                if 'next_button' in locals() and next_button:
-                    is_valid, errors = validate_form(respuestas, guia_ii_questions, current_section)
-                    if is_valid:
-                        st.session_state.guia_i_responses = respuestas
-                        st.session_state.current_section += 1
-                        st.rerun()
-                    else:
-                        st.warning("⚠️ Corrija los siguientes errores:")
-                        for error in errors:
-                            st.write(f"- {error}")
-                
-                if 'submit_button' in locals() and submit_button:
+                if submit_button:
                     try:
                         is_valid, errors = validate_form(respuestas, guia_i_questions + guia_ii_questions)
                         if is_valid:
@@ -910,7 +810,6 @@ if section == "📋 Evaluación":
                             if log_response(respuestas, temp_dir):
                                 st.session_state.show_guia_ii = False
                                 st.session_state.guia_i_responses = None
-                                st.session_state.current_section = 0
                                 st.success("✅ ¡Evaluación Guía I y II completada exitosamente!")
                             else:
                                 st.session_state.form_error = "Error al guardar respuestas, por favor intenta de nuevo."
@@ -923,18 +822,6 @@ if section == "📋 Evaluación":
                         logger.error(f"Error processing Guía II submission: {str(e)}")
                         st.session_state.form_error = str(e)
                         st.error(f"❌ Error al procesar la evaluación: {str(e)}")
-                
-                if cancel_button:
-                    if st.session_state.get("confirm_cancel_guia_ii", False):
-                        st.session_state.guia_i_responses = None
-                        st.session_state.show_guia_ii = False
-                        st.session_state.current_section = 0
-                        st.session_state.confirm_cancel_guia_ii = False
-                        st.success("✅ Formulario de Guía II limpiado.")
-                        st.rerun()
-                    else:
-                        st.session_state.confirm_cancel_guia_ii = True
-                        st.warning("⚠️ ¿Está seguro de que desea cancelar? Presione 'Cancelar' nuevamente para confirmar.")
                 
                 if st.session_state.form_error:
                     if st.form_submit_button("🔄 Reintentar", help="Reintentar el envío"):
