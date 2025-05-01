@@ -12,13 +12,13 @@ from typing import Dict, List, Tuple
 # Configure logging for debugging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-DEBUG_MODE = True  # Enabled for debugging
+DEBUG_MODE = True
 
 # Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
-PASSWORD = os.getenv("NOM35", "NOM35")
-SALT = os.getenv("NOM35", secrets.token_hex(16))
+PASSWORD = os.getenv("SURVEY_PASSWORD", "securepassword123")
+SALT = os.getenv("SURVEY_SALT", secrets.token_hex(16))
 
 # Validate environment variables
 if not PASSWORD or not SALT:
@@ -430,7 +430,6 @@ GUIDE3_QUESTIONS = [
 
 # Utility Functions
 def hash_password(password: str, salt: str) -> str:
-    """Hash password with salt using SHA-256."""
     try:
         salted_password = password + salt
         return hashlib.sha256(salted_password.encode()).hexdigest()
@@ -439,7 +438,6 @@ def hash_password(password: str, salt: str) -> str:
         return ""
 
 def action_lock() -> bool:
-    """Prevent rapid button clicks with a 1-second debounce."""
     try:
         current_time = time.time()
         if current_time - st.session_state.last_action_time < 1:
@@ -453,7 +451,6 @@ def action_lock() -> bool:
         return False
 
 def initialize_log():
-    """Initialize log file with headers if it doesn't exist."""
     try:
         if not os.path.exists(LOG_FILE):
             headers = (
@@ -469,7 +466,6 @@ def initialize_log():
         raise
 
 def save_responses_to_log() -> Tuple[pd.DataFrame, str]:
-    """Save responses to log file with timestamp."""
     try:
         initialize_log()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -485,7 +481,6 @@ def save_responses_to_log() -> Tuple[pd.DataFrame, str]:
         raise
 
 def refresh_log() -> bool:
-    """Refresh log file by recreating it."""
     try:
         initialize_log()
         return True
@@ -523,14 +518,25 @@ st.markdown(
     """
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
-    html, body, #root, .stApp, .block-container {
+    * { box-sizing: border-box; }
+    html, body, #root, .stApp, .block-container, [data-testid="stAppViewContainer"], [data-testid] {
         margin: 0 !important;
         padding: 0 !important;
+        top: 0 !important;
+        position: relative;
+    }
+    .stApp {
+        background-color: #F5F7FA;
+        /* border: 1px solid green; */ /* Debug */
+    }
+    .block-container {
+        /* border: 1px solid yellow; */ /* Debug */
     }
     .main {
-        background-color: #F5F7FA;
         font-family: 'Roboto', sans-serif;
-        padding-top: 0;
+        padding: 0 !important;
+        margin: 0 !important;
+        background-color: #F5F7FA;
     }
     .stButton>button {
         background-color: #2E7D32;
@@ -551,11 +557,9 @@ st.markdown(
     .container {
         max-width: 1200px;
         margin: 0 auto;
-        padding: 5px 20px 20px 20px;
-        margin-top: 0;
+        padding: 0 20px 20px 20px;
         min-height: 100vh;
-        box-sizing: border-box;
-        /* border: 1px solid red; */ /* Uncomment for debugging */
+        /* border: 1px solid red; */ /* Debug */
     }
     .card {
         background: white;
@@ -568,13 +572,15 @@ st.markdown(
         font-size: 22px;
         font-weight: 700;
         color: #1A237E;
-        margin: 0 0 5px 0;
-        /* border: 1px solid blue; */ /* Uncomment for debugging */
+        margin: 0;
+        padding-top: 2px;
+        /* border: 1px solid blue; */ /* Debug */
     }
     .welcome-text {
-        font-size: 14px;
+        font-size: 13px;
         color: #333;
-        margin: 0 0 5px 0;
+        margin: 0;
+        padding-top: 2px;
     }
     .question {
         font-size: 18px;
@@ -662,19 +668,21 @@ st.markdown(
     }
     @media (max-width: 600px) {
         .container {
-            padding: 2px 10px 10px 10px;
+            padding: 0 10px 10px 10px;
             margin: 0;
         }
         .header {
-            font-size: 18px;
-            margin: 0 0 4px 0;
+            font-size: 16px;
+            margin: 0;
+            padding-top: 1px;
         }
         .welcome-text {
-            font-size: 12px;
-            margin: 0 0 4px 0;
+            font-size: 11px;
+            margin: 0;
+            padding-top: 1px;
         }
         .question {
-            font-size: 16px;
+            font-size: 14px;
         }
         .stRadio > div {
             flex-direction: column;
@@ -695,15 +703,33 @@ st.markdown(
             const currentPosition = window.scrollY;
             setTimeout(() => window.scrollTo(0, currentPosition), 0);
         }
-        // Debug: Log offsets and styles
         window.addEventListener('load', () => {
             const container = document.querySelector('.container');
             const stApp = document.querySelector('.stApp');
+            const header = document.querySelector('.header');
+            // Log offsets
             console.log('Container Offset Top:', container?.getBoundingClientRect().top);
             console.log('stApp Offset Top:', stApp?.getBoundingClientRect().top);
+            console.log('Header Offset Top:', header?.getBoundingClientRect().top);
+            // Log styles
             console.log('Container Styles:', getComputedStyle(container));
             console.log('stApp Styles:', getComputedStyle(stApp));
+            // Log parent elements
+            let parent = container?.parentElement;
+            let parentChain = [];
+            while (parent && parent !== document.body) {
+                parentChain.push({
+                    tag: parent.tagName,
+                    class: parent.className,
+                    offsetTop: parent.getBoundingClientRect().top,
+                    styles: getComputedStyle(parent)
+                });
+                parent = parent.parentElement;
+            }
+            console.log('Parent Elements:', parentChain);
+            // Log DOM structure
             console.log('Container HTML:', container?.outerHTML);
+            console.log('stApp HTML:', stApp?.outerHTML);
         });
     </script>
 """,
@@ -761,53 +787,37 @@ except Exception as e:
         st.write(f"Debug: {str(e)}")
 
 def calculate_progress() -> float:
-    """Calculate survey completion progress based on answering all required questions."""
     try:
-        # Total questions for Guía I (g1_q1 counts as 1 question with 2 mandatory subfields)
-        total_questions = len(GUIDE1_QUESTIONS)  # 27 questions
+        total_questions = len(GUIDE1_QUESTIONS)
         required_keys = [q["id"] for q in GUIDE1_QUESTIONS]
-
-        # Add Guía II and III if trauma is reported and survey is not fully complete
         if st.session_state.has_trauma and not st.session_state.guide3_complete:
             required_keys += [q["id"] for q in GUIDE2_QUESTIONS] + [q["id"] for q in GUIDE3_QUESTIONS]
-            total_questions += len(GUIDE2_QUESTIONS) + len(GUIDE3_QUESTIONS)  # 46 + 26 = 72
-
+            total_questions += len(GUIDE2_QUESTIONS) + len(GUIDE3_QUESTIONS)
         answered_questions = 0
         for key in required_keys:
             if key == "g1_q1":
-                # g1_q1 is answered only if both mandatory subfields are non-empty
                 nombre = st.session_state.responses.get("g1_q1_nombre", "").strip()
                 apellido = st.session_state.responses.get("g1_q1_apellido", "").strip()
                 if nombre and apellido:
                     answered_questions += 1
-                    if DEBUG_MODE:
-                        logger.debug(f"g1_q1 answered: nombre='{nombre}', apellido='{apellido}'")
             else:
                 response = st.session_state.responses.get(key)
                 if response is not None:
-                    if isinstance(response, str):
-                        if response.strip():  # Count non-whitespace strings
-                            answered_questions += 1
-                    elif isinstance(response, (int, float)):
-                        if response != 0:  # Count non-zero numbers
-                            answered_questions += 1
+                    if isinstance(response, str) and response.strip():
+                        answered_questions += 1
+                    elif isinstance(response, (int, float)) and response != 0:
+                        answered_questions += 1
                     else:
-                        answered_questions += 1  # Count other non-None responses (e.g., select options)
-                if DEBUG_MODE:
-                    logger.debug(f"Key {key}: response='{response}', counted={response is not None and (not isinstance(response, str) or response.strip())}")
-
+                        answered_questions += 1
         progress = answered_questions / total_questions if total_questions > 0 else 0
         if DEBUG_MODE:
             logger.debug(f"Progress: {answered_questions}/{total_questions} = {progress:.2%}")
-            logger.debug(f"Required keys: {required_keys}")
-            logger.debug(f"Responses: {st.session_state.responses}")
         return progress
     except Exception as e:
         logger.error(f"Error in calculate_progress: {str(e)}")
         return 0
 
 def validate_responses(responses: Dict, guide_questions: List, is_guide1: bool = False) -> Dict[str, str]:
-    """Validate survey responses and return field-specific errors."""
     try:
         errors = {}
         if is_guide1:
@@ -817,32 +827,21 @@ def validate_responses(responses: Dict, guide_questions: List, is_guide1: bool =
                     if not value:
                         field_label = subfield["label" if lang_code == "es" else "label_en"]
                         errors[subfield["id"]] = t["missing_field"].format(field=field_label)
-                        if DEBUG_MODE:
-                            logger.debug(f"Validation failed for {subfield['id']}: Value='{value}'")
-
             if "g1_q2" not in responses or not (18 <= responses["g1_q2"] <= 100):
                 errors["g1_q2"] = t["invalid_age"]
-
             if "g1_q4" in responses and "g1_q2" in responses:
                 if not (0 <= responses["g1_q4"] <= responses["g1_q2"]):
                     errors["g1_q4"] = t["invalid_years_worked"]
-
         required_keys = [q["id"] for q in guide_questions if q["type"] != "text_group"]
         if is_guide1:
             required_keys += [subfield["id"] for q in guide_questions if q.get("type") == "text_group" for subfield in q["subfields"] if not subfield.get("optional", False)]
-
         for key in required_keys:
             if key not in responses or responses[key] is None or (isinstance(responses[key], str) and not responses[key].strip()):
                 question_text = next((q["text" if lang_code == "es" else "text_en"] for q in guide_questions if q["id"] == key), key)
                 errors[key] = t["missing_field"].format(field=question_text)
-                if DEBUG_MODE:
-                    logger.debug(f"Validation failed for {key}: Value='{responses.get(key)}'")
             elif not is_guide1 and responses[key] not in VALID_RESPONSES_GUIDE2_3:
                 question_text = next((q["text" if lang_code == "es" else "text_en"] for q in guide_questions if q["id"] == key), key)
                 errors[key] = t["missing_field"].format(field=question_text)
-                if DEBUG_MODE:
-                    logger.debug(f"Validation failed for {key}: Invalid response='{responses[key]}'")
-
         return errors
     except Exception as e:
         logger.error(f"Error in validate_responses: {str(e)}")
@@ -858,10 +857,8 @@ try:
     st.progress(progress)
     st.markdown(f'<p class="tooltip">{t["progress"]}: {int(progress * 100)}%</p>', unsafe_allow_html=True)
 
-    # Define valid responses for Guía II and III
     VALID_RESPONSES_GUIDE2_3 = [t["always"], t["almost_always"], t["sometimes"], t["almost_never"], t["never"]]
 
-    # Guía I
     guide1_class = "guide-section disabled-section" if st.session_state.guide1_complete else "guide-section visible"
     st.markdown(f'<div id="guide1-section" class="{guide1_class}">', unsafe_allow_html=True)
     st.markdown(f'<h2 class="header">{t["guide1"]}</h2>', unsafe_allow_html=True)
@@ -993,7 +990,6 @@ try:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Guía II
     if st.session_state.guide1_complete and st.session_state.has_trauma and not st.session_state.guide2_complete:
         guide2_class = "guide-section visible" if st.session_state.show_guide2 else "guide-section"
         st.markdown(f'<div id="guide2-section" class="{guide2_class}">', unsafe_allow_html=True)
@@ -1056,7 +1052,6 @@ try:
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Guía III
     if st.session_state.guide2_complete and st.session_state.has_trauma and not st.session_state.guide3_complete:
         st.markdown('<div id="guide3-section" class="guide-section visible">', unsafe_allow_html=True)
         st.markdown(f'<h2 class="header">{t["guide3"]}</h2>', unsafe_allow_html=True)
