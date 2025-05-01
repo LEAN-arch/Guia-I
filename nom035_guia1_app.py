@@ -1289,12 +1289,12 @@ elif section == "📥 Descargar Reporte":
                             else:
                                 st.write(path)
                     
-        except Exception as e:
-            logger.error(f"Error generating report: {str(e)}")
-            st.error(f"❌ Error al generar el reporte: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error generating report: {str(e)}")
+        st.error(f"❌ Error al generar el reporte: {str(e)}")
         
-        elif access_key:
-            st.error("🔐 Clave de acceso incorrecta.")
+    elif access_key:
+        st.error("🔐 Clave de acceso incorrecta.")
     
     elif section == "🔄 Reiniciar Datos":
         st.title("🔄 Reiniciar Datos")
