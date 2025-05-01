@@ -132,7 +132,7 @@ GUIDE2_QUESTIONS = [
     {"id": "g2_q12", "text": "Puedo decidir la cantidad de trabajo que realizo durante la jornada laboral.", "text_en": "I can decide the amount of work I do during the workday."},
     {"id": "g2_q13", "text": "Tengo libertad para decidir cómo realizar mi trabajo.", "text_en": "I have the freedom to decide how to perform my job."},
     {"id": "g2_q14", "text": "Mi trabajo requiere que tome decisiones difíciles.", "text_en": "My job requires me to make difficult decisions."},
-    {"id": "g2_q15", "text": "Tengo que atender varias tareas al mismo tiempo en mi trabajo.", "text_en": " Multilingualism I have to handle multiple tasks at the same time in my job."},
+    {"id": "g2_q15", "text": "Tengo que atender varias tareas al mismo tiempo en mi trabajo.", "text_en": "I have to handle multiple tasks at the same time in my job."},
     {"id": "g2_q16", "text": "Mi trabajo requiere un alto nivel de concentración.", "text_en": "My job requires a high level of concentration."},
     {"id": "g2_q17", "text": "La cantidad de trabajo que tengo que hacer es excesiva.", "text_en": "The amount of work I have to do is excessive."},
     {"id": "g2_q18", "text": "Tengo que trabajar horas extras con frecuencia.", "text_en": "I have to work overtime frequently."},
@@ -235,6 +235,7 @@ st.markdown("""
     .section-header {font-size: 20px; font-weight: bold; margin-top: 20px;}
     .stTextInput, .stSelectbox, .stRadio {margin-bottom: 20px;}
     .stRadio > div {flex-direction: row; flex-wrap: wrap;}
+    .radio-group {border: 1px solid #ddd; padding: 10px; border-radius: 5px; margin-bottom: 20px;}
     @media (max-width: 600px) {
         .question {font-size: 16px;}
         .section-header {font-size: 18px;}
@@ -351,7 +352,7 @@ if not st.session_state.guide1_complete:
     # Personal Information Section
     st.markdown(f"<p class='section-header' role='region' aria-label='Personal Information'>{t['personal_info']}</p>", unsafe_allow_html=True)
     for q in GUIDE1_QUESTIONS[:7]:  # Questions 1-7
-        st.markdown(f"<p class='question' role='heading' aria-label='Question'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p class='question' id='question-{q['id']}' role='heading' aria-label='{q['text' if lang_code == 'es' else 'text_en']}'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
         if q["type"] == "text_group":
             for subfield in q["subfields"]:
                 response = st.text_input(
@@ -377,52 +378,52 @@ if not st.session_state.guide1_complete:
     # Traumatic Events Section
     st.markdown(f"<p class='section-header' role='region' aria-label='Traumatic Events'>{t['next_section']}</p>", unsafe_allow_html=True)
     for q in GUIDE1_QUESTIONS[7:13]:  # Questions 8-13
-        st.markdown(f"<p class='question' role='heading' aria-label='Question'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
+        st.markdown(f"<div class='radio-group' role='radiogroup' aria-describedby='question-{q['id']}'><p class='question' id='question-{q['id']}' role='heading' aria-label='{q['text' if lang_code == 'es' else 'text_en']}'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
         response = st.radio(
             "", [t["yes"], t["no"]], key=q["id"], 
-            label_visibility="collapsed",
-            format_func=lambda x: f"{x} (aria-label='{q['text' if lang_code == 'es' else 'text_en']} - {x}')"
+            label_visibility="collapsed"
         )
         st.session_state.responses[q["id"]] = response
+        st.markdown("</div>", unsafe_allow_html=True)
         if response == t["yes"]:
             st.session_state.has_trauma = True
     
     # Persistent Memories Section
     st.markdown(f"<p class='section-header' role='region' aria-label='Persistent Memories'>{t['persistent_memories']}</p>", unsafe_allow_html=True)
     for q in GUIDE1_QUESTIONS[13:15]:  # Questions 14-15
-        st.markdown(f"<p class='question' role='heading' aria-label='Question'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
+        st.markdown(f"<div class='radio-group' role='radiogroup' aria-describedby='question-{q['id']}'><p class='question' id='question-{q['id']}' role='heading' aria-label='{q['text' if lang_code == 'es' else 'text_en']}'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
         response = st.radio(
             "", [t["yes"], t["no"]], key=q["id"], 
-            label_visibility="collapsed",
-            format_func=lambda x: f"{x} (aria-label='{q['text' if lang_code == 'es' else 'text_en']} - {x}')"
+            label_visibility="collapsed"
         )
         st.session_state.responses[q["id"]] = response
+        st.markdown("</div>", unsafe_allow_html=True)
         if response == t["yes"]:
             st.session_state.has_trauma = True
     
     # Avoidance Efforts Section
     st.markdown(f"<p class='section-header' role='region' aria-label='Avoidance Efforts'>{t['avoidance_efforts']}</p>", unsafe_allow_html=True)
     for q in GUIDE1_QUESTIONS[15:22]:  # Questions 16-22
-        st.markdown(f"<p class='question' role='heading' aria-label='Question'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
+        st.markdown(f"<div class='radio-group' role='radiogroup' aria-describedby='question-{q['id']}'><p class='question' id='question-{q['id']}' role='heading' aria-label='{q['text' if lang_code == 'es' else 'text_en']}'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
         response = st.radio(
             "", [t["yes"], t["no"]], key=q["id"], 
-            label_visibility="collapsed",
-            format_func=lambda x: f"{x} (aria-label='{q['text' if lang_code == 'es' else 'text_en']} - {x}')"
+            label_visibility="collapsed"
         )
         st.session_state.responses[q["id"]] = response
+        st.markdown("</div>", unsafe_allow_html=True)
         if response == t["yes"]:
             st.session_state.has_trauma = True
     
     # Affectation Section
     st.markdown(f"<p class='section-header' role='region' aria-label='Affectation'>{t['affectation']}</p>", unsafe_allow_html=True)
     for q in GUIDE1_QUESTIONS[22:]:  # Questions 23-27
-        st.markdown(f"<p class='question' role='heading' aria-label='Question'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
+        st.markdown(f"<div class='radio-group' role='radiogroup' aria-describedby='question-{q['id']}'><p class='question' id='question-{q['id']}' role='heading' aria-label='{q['text' if lang_code == 'es' else 'text_en']}'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
         response = st.radio(
             "", [t["yes"], t["no"]], key=q["id"], 
-            label_visibility="collapsed",
-            format_func=lambda x: f"{x} (aria-label='{q['text' if lang_code == 'es' else 'text_en']} - {x}')"
+            label_visibility="collapsed"
         )
         st.session_state.responses[q["id"]] = response
+        st.markdown("</div>", unsafe_allow_html=True)
         if response == t["yes"]:
             st.session_state.has_trauma = True
     
@@ -467,13 +468,13 @@ if st.session_state.guide1_complete and st.session_state.has_trauma and not st.s
     # Display questions for current page
     current_questions = paginate_questions(GUIDE2_QUESTIONS, page, QUESTIONS_PER_PAGE)
     for q in current_questions:
-        st.markdown(f"<p class='question' role='heading' aria-label='Question'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
+        st.markdown(f"<div class='radio-group' role='radiogroup' aria-describedby='question-{q['id']}'><p class='question' id='question-{q['id']}' role='heading' aria-label='{q['text' if lang_code == 'es' else 'text_en']}'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
         response = st.radio(
             "", [t["always"], t["almost_always"], t["sometimes"], t["almost_never"], t["never"]], 
-            key=q["id"], label_visibility="collapsed",
-            format_func=lambda x: f"{x} (aria-label='{q['text' if lang_code == 'es' else 'text_en']} - {x}')"
+            key=q["id"], label_visibility="collapsed"
         )
         st.session_state.responses[q["id"]] = response
+        st.markdown("</div>", unsafe_allow_html=True)
     
     # Submit and Reset Buttons
     if page == total_pages - 1:  # Show buttons only on last page
@@ -517,13 +518,13 @@ if st.session_state.guide2_complete and st.session_state.has_trauma and not st.s
     # Display questions for current page
     current_questions = paginate_questions(GUIDE3_QUESTIONS, page, QUESTIONS_PER_PAGE)
     for q in current_questions:
-        st.markdown(f"<p class='question' role='heading' aria-label='Question'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
+        st.markdown(f"<div class='radio-group' role='radiogroup' aria-describedby='question-{q['id']}'><p class='question' id='question-{q['id']}' role='heading' aria-label='{q['text' if lang_code == 'es' else 'text_en']}'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
         response = st.radio(
             "", [t["always"], t["almost_always"], t["sometimes"], t["almost_never"], t["never"]], 
-            key=q["id"], label_visibility="collapsed",
-            format_func=lambda x: f"{x} (aria-label='{q['text' if lang_code == 'es' else 'text_en']} - {x}')"
+            key=q["id"], label_visibility="collapsed"
         )
         st.session_state.responses[q["id"]] = response
+        st.markdown("</div>", unsafe_allow_html=True)
     
     # Submit and Reset Buttons
     if page == total_pages - 1:  # Show buttons only on last page
