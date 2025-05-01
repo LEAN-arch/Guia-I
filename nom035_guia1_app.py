@@ -12,6 +12,7 @@ import functools
 from pathlib import Path
 import uuid
 import retrying
+import base64
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -23,6 +24,12 @@ load_dotenv()
 PASSWORD = os.getenv("SURVEY_PASSWORD", "securepassword123")
 SALT = os.getenv("SURVEY_SALT", secrets.token_hex(16))
 LOG_FILE = os.getenv("LOG_FILE", "nom035_log.csv")
+
+# Validate environment variables
+if not all([PASSWORD, SALT, LOG_FILE]):
+    logger.error("Missing required environment variables: SURVEY_PASSWORD, SURVEY_SALT, or LOG_FILE")
+    st.error("Aplicación mal configurada. Contacte al soporte.")
+    st.stop()
 
 # Language translations (Spanish only)
 LANGUAGES = {
@@ -239,6 +246,8 @@ def get_valid_responses() -> List[str]:
 def hash_password(password: str, salt: str) -> str:
     """Hash password with salt using SHA-256."""
     try:
+        if not isinstance(password, str) or not isinstance(salt, str):
+            raise ValueError("Password and salt must be strings")
         salted_password = password + salt
         return hashlib.sha256(salted_password.encode()).hexdigest()
     except Exception as e:
@@ -251,7 +260,7 @@ CORRECT_PASSWORD_HASH = hash_password(PASSWORD, SALT)
     stop_max_attempt_number=3,
     wait_exponential_multiplier=1000,
     wait_exponential_max=10000,
-    retry_on_exception=lambda e: isinstance(e, (PermissionError, IOError))
+    retry_on_exception=lambda e: isinstance(e, (PermissionError, IOError, FileNotFoundError, OSError))
 )
 def initialize_log() -> None:
     """Initialize log file with headers if it doesn't exist."""
@@ -275,7 +284,7 @@ def initialize_log() -> None:
     stop_max_attempt_number=3,
     wait_exponential_multiplier=1000,
     wait_exponential_max=10000,
-    retry_on_exception=lambda e: isinstance(e, (PermissionError, IOError))
+    retry_on_exception=lambda e: isinstance(e, (PermissionError, IOError, FileNotFoundError, OSError))
 )
 def save_responses_to_log(responses: Dict) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     """Save responses to log file with timestamp."""
@@ -302,7 +311,7 @@ def save_responses_to_log(responses: Dict) -> Tuple[Optional[pd.DataFrame], Opti
     stop_max_attempt_number=3,
     wait_exponential_multiplier=1000,
     wait_exponential_max=10000,
-    retry_on_exception=lambda e: isinstance(e, (PermissionError, IOError))
+    retry_on_exception=lambda e: isinstance(e, (PermissionError, IOError, FileNotFoundError, OSError))
 )
 def refresh_log() -> bool:
     """Refresh log file by recreating it."""
@@ -541,22 +550,39 @@ def render_sidebar() -> None:
             if st.button(t["download_log"], key="download_button"):
                 if action_lock():
                     try:
+                        if not password_download:
+                            st.error(t["incorrect_password"])
+                            logger.debug("Empty password provided for download")
+                            return
                         hashed_input = hash_password(password_download, SALT)
                         if hashed_input == CORRECT_PASSWORD_HASH:
                             log_path = Path(LOG_FILE)
-                            if not log_path.exists() or log_path.stat().st_size == 0:
+                            if not log_path.exists():
                                 st.warning(t["file_not_found"])
+                                logger.debug("Log file not found for download")
+                            elif log_path.stat().st_size == 0:
+                                st.warning(t["file_not_found"])
+                                logger.debug("Log file is empty")
                             else:
-                                with log_path.open("rb") as f:
-                                    csv_bytes = f.read()
-                                b64 = base64.b64encode(csv_bytes).decode()
-                                href = f'<a href="data:file/csv;base64,{b64}" download="nom035_log.csv" role="button" aria-label="Download Log CSV">Download Log CSV</a>'
-                                st.markdown(href, unsafe_allow_html=True)
+                                try:
+                                    with log_path.open("rb") as f:
+                                        csv_bytes = f.read()
+                                    b64 = base64.b64encode(csv_bytes).decode()
+                                    href = f'<a href="data:file/csv;base64,{b64}" download="nom035_log.csv" role="button" aria-label="Download Log CSV">Download Log CSV</a>'
+                                    st.markdown(href, unsafe_allow_html=True)
+                                    logger.info("Log file downloaded successfully")
+                                except (PermissionError, IOError, OSError) as e:
+                                    logger.error(f"Failed to read log file: {str(e)}")
+                                    st.error(f"{t['unexpected_error'].format(error='No se pudo leer el archivo de registro')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="No se pudo leer el archivo de registro"))
                         else:
                             st.error(t["incorrect_password"])
+                            logger.debug("Incorrect password provided for download")
+                    except ValueError as e:
+                        logger.error(f"Password hashing error: {str(e)}")
+                        st.error(f"{t['unexpected_error'].format(error='Error de autenticación')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Error de autenticación"))
                     except Exception as e:
-                        logger.error(f"Failed to download log: {str(e)}")
-                        st.error(f"{t['unexpected_error'].format(error='Log download failed')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Log download failed"))
+                        logger.error(f"Unexpected error during log download: {str(e)}")
+                        st.error(f"{t['unexpected_error'].format(error='Descarga de registro fallida')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Descarga de registro fallida"))
 
             st.markdown(f'<h3 class="subheader">{t["refresh_log"]}</h3>', unsafe_allow_html=True)
             password_refresh = st.text_input(
@@ -568,31 +594,42 @@ def render_sidebar() -> None:
             if st.button(t["refresh_log"], key="refresh_button"):
                 if action_lock():
                     try:
+                        if not password_refresh:
+                            st.error(t["incorrect_password"])
+                            logger.debug("Empty password provided for refresh")
+                            return
                         hashed_input = hash_password(password_refresh, SALT)
                         if hashed_input == CORRECT_PASSWORD_HASH:
                             if refresh_log():
                                 st.success(t["log_refreshed"])
+                                logger.info("Log file refreshed successfully")
                             else:
-                                st.error("Failed to refresh log.")
+                                st.error("No se pudo refrescar el registro.")
+                                logger.error("Log refresh returned False")
                         else:
                             st.error(t["incorrect_password"])
+                            logger.debug("Incorrect password provided for refresh")
+                    except ValueError as e:
+                        logger.error(f"Password hashing error: {str(e)}")
+                        st.error(f"{t['unexpected_error'].format(error='Error de autenticación')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Error de autenticación"))
                     except Exception as e:
-                        logger.error(f"Failed to refresh log: {str(e)}")
-                        st.error(f"{t['unexpected_error'].format(error='Log refresh failed')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Log refresh failed"))
+                        logger.error(f"Unexpected error during log refresh: {str(e)}")
+                        st.error(f"{t['unexpected_error'].format(error='Refresco de registro fallido')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Refresco de registro fallido"))
     except Exception as e:
         logger.error(f"Error rendering sidebar: {str(e)}")
-        st.error(f"{t['unexpected_error'].format(error='Sidebar rendering failed')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Sidebar rendering failed"))
+        st.error(f"{t['unexpected_error'].format(error='No se pudo cargar la barra lateral')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="No se pudo cargar la barra lateral"))
 
 def action_lock() -> bool:
     """Prevent rapid button clicks with a 1-second debounce."""
     try:
         current_time = time.time()
-        if current_time - st.session_state.last_action_time < 1:
-            logger.debug("Action lock triggered: Too frequent clicks.")
-            st.warning("Please wait, processing...")
+        last_action_time = st.session_state.get("last_action_time", 0)
+        if current_time - last_action_time < 1:
+            logger.debug(f"Action lock triggered: Too frequent clicks (current: {current_time}, last: {last_action_time})")
+            st.warning("Por favor espere, procesando...")
             return False
         st.session_state.last_action_time = current_time
-        logger.debug("Action lock passed.")
+        logger.debug(f"Action lock passed: Updated last_action_time to {current_time}")
         return True
     except Exception as e:
         logger.error(f"Error in action_lock: {str(e)}")
