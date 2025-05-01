@@ -14,16 +14,47 @@ from datetime import datetime
 # Configuracion de pagina
 st.set_page_config(page_title="🧠 NOM-035 Guia I", layout="centered")
 
-# Clave de acceso predeterminada
-ACCESS_KEY = "NOM035G1"
+# Clave de acceso predeterminada para descargar reportes
+ACCESS_KEY = "NOM035_G1"
+# Clave para reiniciar datos
+RESET_PASSWORD = "RESET_G1"
+# Archivo de log
+LOG_FILE = "responses_log.csv"
 
 if "responses" not in st.session_state:
     st.session_state.responses = []
 
+# Funcion para guardar respuestas en el log
+def log_response(response):
+    try:
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        log_data = {'Timestamp': timestamp, **response}
+        log_df = pd.DataFrame([log_data])
+        # Si el archivo existe, agregar sin encabezado; si no, crear con encabezado
+        mode = 'a' if os.path.exists(LOG_FILE) else 'w'
+        header = not os.path.exists(LOG_FILE)
+        log_df.to_csv(LOG_FILE, mode=mode, header=header, index=False)
+    except Exception as e:
+        st.error(f"❌ Error al guardar en el log: {str(e)}")
+
+# Funcion para reiniciar datos
+def reset_data(password):
+    if password == RESET_PASSWORD:
+        st.session_state.responses = []
+        try:
+            # Truncar el archivo de log
+            with open(LOG_FILE, 'w') as f:
+                f.write('')
+            st.success("✅ Datos y log reiniciados exitosamente.")
+        except Exception as e:
+            st.error(f"❌ Error al reiniciar el log: {str(e)}")
+    else:
+        st.error("🔐 Contraseña incorrecta para reiniciar datos.")
+
 # Sidebar
 st.sidebar.image("assets/FOBO2.png", width=100)
 st.sidebar.title("Evaluacion NOM-035")
-section = st.sidebar.radio("Ir a seccion:", ["📋 Evaluacion", "📥 Descargar Reporte"])
+section = st.sidebar.radio("Ir a seccion:", ["📋 Evaluacion", "📥 Descargar Reporte", "🔄 Reiniciar Datos"])
 
 # Preguntas (27 en total, organizadas en secciones)
 questions = [
@@ -258,6 +289,7 @@ if section == "📋 Evaluacion":
             try:
                 if all(v != "" for v in respuestas.values()):
                     st.session_state.responses.append(respuestas)
+                    log_response(respuestas)
                     st.success("✅ ¡Evaluacion enviada exitosamente!")
                 else:
                     st.warning("⚠️ Responde todas las preguntas antes de enviar.")
@@ -265,7 +297,7 @@ if section == "📋 Evaluacion":
                 st.error(f"❌ Error al procesar la evaluacion: {str(e)}")
 
 # Reporte Excel/CSV
-if section == "📥 Descargar Reporte":
+elif section == "📥 Descargar Reporte":
     st.title("📥 Reporte Consolidado")
     
     # Solicitar clave de acceso
@@ -422,3 +454,15 @@ if section == "📥 Descargar Reporte":
         st.error("🔐 Clave de acceso incorrecta.")
     else:
         st.warning("⚠️ Ingrese la clave de acceso para descargar los datos.")
+
+# Reiniciar Datos
+elif section == "🔄 Reiniciar Datos":
+    st.title("🔄 Reiniciar Datos")
+    st.markdown("Ingrese la contraseña para reiniciar todas las respuestas y el log. Esta acción no se puede deshacer.")
+    
+    with st.form("reset_form"):
+        reset_password = st.text_input("🔑 Contraseña para reiniciar:", type="password")
+        reset_button = st.form_submit_button("🔄 Reiniciar")
+        
+        if reset_button:
+            reset_data(reset_password)
