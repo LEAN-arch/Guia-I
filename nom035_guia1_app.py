@@ -23,7 +23,8 @@ LANGUAGES = {
         "guide3": "Guía III: Entorno Organizacional Favorable",
         "submit": "Enviar",
         "download_log": "Descargar Registro",
-        "password_prompt": "Ingrese la contraseña para descargar el registro:",
+        "refresh_log": "Refrescar Registro",
+        "password_prompt": "Ingrese la contraseña:",
         "incorrect_password": "Contraseña incorrecta",
         "progress": "Progreso",
         "yes": "Sí",
@@ -44,7 +45,8 @@ LANGUAGES = {
         "validation_error": "Por favor complete todos los campos requeridos correctamente.",
         "invalid_age": "La edad debe ser un número entre 18 y 100.",
         "invalid_years_worked": "Los años trabajados deben ser un número entre 0 y la edad ingresada.",
-        "please_wait": "Por favor espere, procesando..."
+        "please_wait": "Por favor espere, procesando...",
+        "log_refreshed": "Registro refrescado exitosamente."
     },
     "en": {
         "title": "NOM-035-STPS-2018 Survey",
@@ -54,7 +56,8 @@ LANGUAGES = {
         "guide3": "Guide III: Favorable Organizational Environment",
         "submit": "Submit",
         "download_log": "Download Log",
-        "password_prompt": "Enter the password to download the log:",
+        "refresh_log": "Refresh Log",
+        "password_prompt": "Enter the password:",
         "incorrect_password": "Incorrect password",
         "progress": "Progress",
         "yes": "Yes",
@@ -75,7 +78,8 @@ LANGUAGES = {
         "validation_error": "Please complete all required fields correctly.",
         "invalid_age": "Age must be a number between 18 and 100.",
         "invalid_years_worked": "Years worked must be a number between 0 and the entered age.",
-        "please_wait": "Please wait, processing..."
+        "please_wait": "Please wait, processing...",
+        "log_refreshed": "Log refreshed successfully."
     }
 }
 
@@ -216,6 +220,40 @@ if "has_trauma" not in st.session_state:
     st.session_state.has_trauma = False
 if "last_action_time" not in st.session_state:
     st.session_state.last_action_time = 0
+
+# Log file path
+LOG_FILE = "nom035_log.csv"
+
+# Initialize log file with headers if it doesn't exist
+def initialize_log():
+    if not os.path.exists(LOG_FILE):
+        headers = (
+            ["timestamp"] +
+            [subfield["id"] for q in GUIDE1_QUESTIONS if q["type"] == "text_group" for subfield in q["subfields"]] +
+            [q["id"] for q in GUIDE1_QUESTIONS if q["type"] != "text_group"] +
+            [q["id"] for q in GUIDE2_QUESTIONS] +
+            [q["id"] for q in GUIDE3_QUESTIONS]
+        )
+        df = pd.DataFrame(columns=headers)
+        df.to_csv(LOG_FILE, index=False)
+
+# Save responses to log
+def save_responses_to_log():
+    initialize_log()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    responses = st.session_state.responses.copy()
+    responses["timestamp"] = timestamp
+    df = pd.DataFrame([responses])
+    # Append to existing log
+    existing_df = pd.read_csv(LOG_FILE)
+    updated_df = pd.concat([existing_df, df], ignore_index=True)
+    updated_df.to_csv(LOG_FILE, index=False)
+    return df, timestamp
+
+# Refresh log file
+def refresh_log():
+    initialize_log()  # Re-creates empty log with headers
+    return True
 
 # Streamlit app configuration
 st.set_page_config(page_title="NOM-035 Survey", layout="wide")
@@ -401,6 +439,8 @@ if not st.session_state.guide1_complete:
                     st.error(error)
             else:
                 st.session_state.guide1_complete = True
+                if not st.session_state.has_trauma:
+                    save_responses_to_log()  # Save to log if no trauma
                 st.success("Guía I completada / Guide I completed")
 
 # Guía II: Factores de Riesgo Psicosocial (only if trauma detected)
@@ -453,28 +493,35 @@ if st.session_state.guide2_complete and st.session_state.has_trauma and not st.s
                     st.error(error)
             else:
                 st.session_state.guide3_complete = True
+                save_responses_to_log()  # Save to log after completing Guía III
                 st.success("Guía III completada / Guide III completed")
 
-# Save responses to CSV
-def save_responses():
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    responses = st.session_state.responses.copy()
-    responses["timestamp"] = timestamp
-    df = pd.DataFrame([responses])
-    return df, timestamp
-
-# Download log
-if st.session_state.guide1_complete and (not st.session_state.has_trauma or st.session_state.guide3_complete):
-    st.header(t["download_log"])
-    password = st.text_input(t["password_prompt"], type="password", key="download_password")
-    if st.button("Descargar / Download", key="download_button"):
-        if action_lock():
-            hashed_input = hash_password(password, SALT)
-            if hashed_input == CORRECT_PASSWORD_HASH:
-                df, timestamp = save_responses()
-                csv = df.to_csv(index=False)
-                b64 = base64.b64encode(csv.encode()).decode()
-                href = f'<a href="data:file/csv;base64,{b64}" download="nom035_responses_{timestamp}.csv" role="button" aria-label="Download CSV">Descargar CSV</a>'
+# Download and Refresh Log Section
+st.header(t["download_log"])
+st.subheader(t["download_log"])
+password_download = st.text_input(t["password_prompt"], type="password", key="download_password")
+if st.button(t["download_log"], key="download_button"):
+    if action_lock():
+        hashed_input = hash_password(password_download, SALT)
+        if hashed_input == CORRECT_PASSWORD_HASH:
+            if os.path.exists(LOG_FILE):
+                with open(LOG_FILE, "rb") as f:
+                    csv_bytes = f.read()
+                b64 = base64.b64encode(csv_bytes).decode()
+                href = f'<a href="data:file/csv;base64,{b64}" download="nom035_log.csv" role="button" aria-label="Download Log CSV">Descargar Registro CSV</a>'
                 st.markdown(href, unsafe_allow_html=True)
             else:
-                st.error(t["incorrect_password"])
+                st.warning("No hay datos en el registro.")
+        else:
+            st.error(t["incorrect_password"])
+
+st.subheader(t["refresh_log"])
+password_refresh = st.text_input(t["password_prompt"], type="password", key="refresh_password")
+if st.button(t["refresh_log"], key="refresh_button"):
+    if action_lock():
+        hashed_input = hash_password(password_refresh, SALT)
+        if hashed_input == CORRECT_PASSWORD_HASH:
+            refresh_log()
+            st.success(t["log_refreshed"])
+        else:
+            st.error(t["incorrect_password"])
