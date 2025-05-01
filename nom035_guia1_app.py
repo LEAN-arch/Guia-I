@@ -523,53 +523,159 @@ st.markdown(
     """
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
-    .main {background-color: #F5F7FA; font-family: 'Roboto', sans-serif;}
+    body { margin: 0; }
+    .main {
+        background-color: #F5F7FA;
+        font-family: 'Roboto', sans-serif;
+        padding-top: 10px;
+    }
     .stButton>button {
-        background-color: #2E7D32; color: white; border-radius: 8px; padding: 10px 20px;
-        font-size: 16px; font-weight: 500; transition: all 0.3s ease;
+        background-color: #2E7D32;
+        color: white;
+        border-radius: 8px;
+        padding: 10px 20px;
+        font-size: 16px;
+        font-weight: 500;
+        transition: all 0.3s ease;
     }
     .stButton>button:hover {
-        background-color: #1B5E20; transform: scale(1.05);
+        background-color: #1B5E20;
+        transform: scale(1.05);
     }
-    .stProgress .st-bo {background-color: #2E7D32;}
-    .container {max-width: 1200px; margin: 0 auto; padding: 20px; min-height: 100vh;}
-    .card {background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 20px;}
-    .header {font-size: 24px; font-weight: 700; color: #1A237E; margin-bottom: 10px;}
-    .question {font-size: 18px; font-weight: 500; color: #333; margin-bottom: 10px;}
-    .tooltip {color: #666; font-size: 14px; margin-bottom: 20px;}
+    .stProgress .st-bo {
+        background-color: #2E7D32;
+    }
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 10px 20px 20px 20px;
+        min-height: 100vh;
+        box-sizing: border-box;
+    }
+    .card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .header {
+        font-size: 22px;
+        font-weight: 700;
+        color: #1A237E;
+        margin: 0 0 8px 0;
+    }
+    .welcome-text {
+        font-size: 16px;
+        color: #333;
+        margin: 0 0 8px 0;
+    }
+    .question {
+        font-size: 18px;
+        font-weight: 500;
+        color: #333;
+        margin-bottom: 10px;
+    }
+    .tooltip {
+        color: #666;
+        font-size: 14px;
+        margin-bottom: 20px;
+    }
     .stTextInput input {
-        border: 2px solid #E0E0E0; border-radius: 8px; padding: 10px;
-        font-size: 16px; transition: border-color 0.3s ease;
+        border: 2px solid #E0E0E0;
+        border-radius: 8px;
+        padding: 10px;
+        font-size: 16px;
+        transition: border-color 0.3s ease;
     }
-    .stTextInput input:focus {border-color: #1565C0;}
-    .invalid-field input {border-color: #D32F2F !important;}
-    .error-message {color: #D32F2F; font-size: 14px; margin-top: 5px;}
-    .stRadio > div {flex-direction: row; flex-wrap: wrap; gap: 10px;}
+    .stTextInput input:focus {
+        border-color: #1565C0;
+    }
+    .invalid-field input {
+        border-color: #D32F2F !important;
+    }
+    .error-message {
+        color: #D32F2F;
+        font-size: 14px;
+        margin-top: 5px;
+    }
+    .stRadio > div {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
     .stRadio label {
-        background: #E8F0FE; padding: 8px 16px; border-radius: 20px;
-        font-size: 16px; transition: background-color 0.3s ease;
+        background: #E8F0FE;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 16px;
+        transition: background-color 0.3s ease;
     }
-    .stRadio label:hover {background: #BBDEFB;}
+    .stRadio label:hover {
+        background: #BBDEFB;
+    }
     .stSelectbox div[role="combobox"] {
-        border: 2px solid #E0E0E0; border-radius: 8px; padding: 10px;
+        border: 2px solid #E0E0E0;
+        border-radius: 8px;
+        padding: 10px;
         font-size: 16px;
     }
-    .st-expander {background: white; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);}
-    .st-expander summary {font-weight: 500; font-size: 18px; color: #1565C0;}
+    .st-expander {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .st-expander summary {
+        font-weight: 500;
+        font-size: 18px;
+        color: #1565C0;
+    }
     .success-message {
-        color: #2E7D32; font-size: 16px; font-weight: 500; text-align: center;
+        color: #2E7D32;
+        font-size: 16px;
+        font-weight: 500;
+        text-align: center;
         animation: fadeIn 0.5s ease-in;
     }
-    .guide-section {opacity: 0; transform: translateY(20px); transition: opacity 0.5s ease, transform 0.5s ease;}
-    .guide-section.visible {opacity: 1; transform: translateY(0);}
-    .disabled-section {opacity: 0.5; pointer-events: none;}
-    @keyframes fadeIn {from {opacity: 0;} to {opacity: 1;}}
+    .guide-section {
+        opacity: 0;
+        transform: translateY(20px);
+        transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .guide-section.visible {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    .disabled-section {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
     @media (max-width: 600px) {
-        .container {padding: 10px;}
-        .header {font-size: 20px;}
-        .question {font-size: 16px;}
-        .stRadio > div {flex-direction: column;}
-        .stButton>button {width: 100%;}
+        .container {
+            padding: 5px 10px 10px 10px;
+            margin-top: 0;
+        }
+        .header {
+            font-size: 20px;
+            margin: 0 0 6px 0;
+        }
+        .welcome-text {
+            font-size: 14px;
+            margin: 0 0 6px 0;
+        }
+        .question {
+            font-size: 16px;
+        }
+        .stRadio > div {
+            flex-direction: column;
+        }
+        .stButton>button {
+            width: 100%;
+        }
     }
     </style>
     <script>
@@ -583,6 +689,10 @@ st.markdown(
             const currentPosition = window.scrollY;
             setTimeout(() => window.scrollTo(0, currentPosition), 0);
         }
+        // Debug: Log container HTML to inspect spacing
+        window.addEventListener('load', () => {
+            console.log('Container HTML:', document.querySelector('.container')?.outerHTML);
+        });
     </script>
 """,
     unsafe_allow_html=True,
@@ -600,7 +710,7 @@ try:
     with st.sidebar:
         st.subheader(t["download_log"])
         password_download = st.text_input(t["password_prompt"], type="password", key="download_password")
-        if st.button(t["download_log"], key="download_button"):
+        if st.button(t["download_log"], key="download grunt_button"):
             if action_lock():
                 try:
                     hashed_input = hash_password(password_download, SALT)
@@ -731,7 +841,7 @@ def validate_responses(responses: Dict, guide_questions: List, is_guide1: bool =
 try:
     st.markdown('<div class="container">', unsafe_allow_html=True)
     st.markdown(f'<h1 class="header">{t["title"]}</h1>', unsafe_allow_html=True)
-    st.write(t["welcome"])
+    st.markdown(f'<p class="welcome-text">{t["welcome"]}</p>', unsafe_allow_html=True)
 
     progress = calculate_progress()
     st.progress(progress)
