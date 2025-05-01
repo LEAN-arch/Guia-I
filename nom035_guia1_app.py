@@ -10,6 +10,9 @@ import logging
 from typing import Dict, List, Tuple, Optional
 from dotenv import load_dotenv
 import functools
+from pathlib import Path
+import uuid
+import retrying
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -229,13 +232,45 @@ GUIDE3_QUESTIONS = [
     {"id": "g3_q26", "text": "La empresa valora mi trabajo.", "text_en": "The company values my work.", "type": "likert"}
 ]
 
+# Validate Questions
+def validate_questions(questions: List[Dict], guide_name: str) -> bool:
+    """Validate question data structure."""
+    valid_types = {"text_group", "number", "select", "yes_no", "likert"}
+    for q in questions:
+        try:
+            if not all(key in q for key in ["id", "text", "text_en", "type"]):
+                logger.error(f"Invalid question in {guide_name}: Missing required keys in {q}")
+                return False
+            if q["type"] not in valid_types:
+                logger.error(f"Invalid question type in {guide_name}: {q['type']} in {q}")
+                return False
+            if q["type"] == "text_group" and "subfields" not in q:
+                logger.error(f"Missing subfields in text_group question in {guide_name}: {q}")
+                return False
+            if q["type"] == "select" and not all(key in q for key in ["options", "options_en"]):
+                logger.error(f"Missing options in select question in {guide_name}: {q}")
+                return False
+        except Exception as e:
+            logger.error(f"Error validating question in {guide_name}: {str(e)}")
+            return False
+    return True
+
 # Cache question data
 @functools.lru_cache(maxsize=1)
 def get_all_questions() -> Tuple[List[Dict], List[Dict], List[Dict]]:
-    """Cache question data to improve performance."""
+    """Cache and validate question data."""
+    if not all(validate_questions(q, name) for q, name in [
+        (GUIDE1_QUESTIONS, "Guide 1"),
+        (GUIDE2_QUESTIONS, "Guide 2"),
+        (GUIDE3_QUESTIONS, "Guide 3")
+    ]):
+        logger.error("Question validation failed. Application cannot proceed.")
+        st.error("Critical error: Invalid question data. Please contact support.")
+        raise ValueError("Invalid question data")
     return GUIDE1_QUESTIONS, GUIDE2_QUESTIONS, GUIDE3_QUESTIONS
 
 # Valid responses for Guides 2 and 3
+@functools.lru_cache(maxsize=2)
 def get_valid_responses(lang_code: str) -> List[str]:
     """Return valid response options for Guides 2 and 3 based on language."""
     return [
@@ -258,63 +293,72 @@ def hash_password(password: str, salt: str) -> str:
 
 CORRECT_PASSWORD_HASH = hash_password(PASSWORD, SALT)
 
+@retrying.retry(
+    stop_max_attempt_number=3,
+    wait_exponential_multiplier=1000,
+    wait_exponential_max=10000,
+    retry_on_exception=lambda e: isinstance(e, (PermissionError, IOError))
+)
 def initialize_log() -> None:
     """Initialize log file with headers if it doesn't exist."""
-    for _ in range(3):  # Retry up to 3 times
-        try:
-            if not os.path.exists(LOG_FILE):
-                headers = (
-                    ["timestamp"] +
-                    [subfield["id"] for q in GUIDE1_QUESTIONS if q["type"] == "text_group" for subfield in q["subfields"]] +
-                    [q["id"] for q in GUIDE1_QUESTIONS if q["type"] != "text_group"] +
-                    [q["id"] for q in GUIDE2_QUESTIONS] +
-                    [q["id"] for q in GUIDE3_QUESTIONS]
-                )
-                pd.DataFrame(columns=headers).to_csv(LOG_FILE, index=False)
-                logger.info("Log file initialized successfully.")
-            return
-        except (PermissionError, IOError) as e:
-            logger.warning(f"Retrying log initialization due to: {str(e)}")
-            time.sleep(1)
-    logger.error("Failed to initialize log file after retries.")
-    st.warning("Could not initialize log file. Proceeding without logging.")
+    log_path = Path(LOG_FILE)
+    try:
+        if not log_path.exists():
+            headers = (
+                ["timestamp"] +
+                [subfield["id"] for q in GUIDE1_QUESTIONS if q["type"] == "text_group" for subfield in q["subfields"]] +
+                [q["id"] for q in GUIDE1_QUESTIONS if q["type"] != "text_group"] +
+                [q["id"] for q in GUIDE2_QUESTIONS] +
+                [q["id"] for q in GUIDE3_QUESTIONS]
+            )
+            pd.DataFrame(columns=headers).to_csv(log_path, index=False)
+            logger.info("Log file initialized successfully.")
+    except Exception as e:
+        logger.error(f"Failed to initialize log file: {str(e)}")
+        raise
 
+@retrying.retry(
+    stop_max_attempt_number=3,
+    wait_exponential_multiplier=1000,
+    wait_exponential_max=10000,
+    retry_on_exception=lambda e: isinstance(e, (PermissionError, IOError))
+)
 def save_responses_to_log(responses: Dict) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     """Save responses to log file with timestamp."""
-    for _ in range(3):  # Retry up to 3 times
+    log_path = Path(LOG_FILE)
+    try:
+        initialize_log()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        responses_copy = responses.copy()
+        responses_copy["timestamp"] = timestamp
+        df = pd.DataFrame([responses_copy])
         try:
-            initialize_log()
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            responses_copy = responses.copy()
-            responses_copy["timestamp"] = timestamp
-            df = pd.DataFrame([responses_copy])
-            try:
-                existing_df = pd.read_csv(LOG_FILE)
-            except pd.errors.EmptyDataError:
-                existing_df = pd.DataFrame(columns=df.columns)
-            updated_df = pd.concat([existing_df, df], ignore_index=True)
-            updated_df.to_csv(LOG_FILE, index=False)
-            logger.info(f"Responses saved to log with timestamp {timestamp}.")
-            return df, timestamp
-        except (PermissionError, IOError) as e:
-            logger.warning(f"Retrying log save due to: {str(e)}")
-            time.sleep(1)
-    logger.error("Failed to save responses to log after retries.")
-    st.warning("Could not save responses to log. Continuing without saving.")
-    return None, None
+            existing_df = pd.read_csv(log_path)
+        except (pd.errors.EmptyDataError, FileNotFoundError):
+            existing_df = pd.DataFrame(columns=df.columns)
+        updated_df = pd.concat([existing_df, df], ignore_index=True)
+        updated_df.to_csv(log_path, index=False)
+        logger.info(f"Responses saved to log with timestamp {timestamp}.")
+        return df, timestamp
+    except Exception as e:
+        logger.error(f"Failed to save responses to log: {str(e)}")
+        raise
 
+@retrying.retry(
+    stop_max_attempt_number=3,
+    wait_exponential_multiplier=1000,
+    wait_exponential_max=10000,
+    retry_on_exception=lambda e: isinstance(e, (PermissionError, IOError))
+)
 def refresh_log() -> bool:
     """Refresh log file by recreating it."""
-    for _ in range(3):  # Retry up to 3 times
-        try:
-            initialize_log()
-            logger.info("Log file refreshed successfully.")
-            return True
-        except (PermissionError, IOError) as e:
-            logger.warning(f"Retrying log refresh due to: {str(e)}")
-            time.sleep(1)
-    logger.error("Failed to refresh log after retries.")
-    return False
+    try:
+        initialize_log()
+        logger.info("Log file refreshed successfully.")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to refresh log: {str(e)}")
+        raise
 
 # Session State Initialization
 def initialize_session_state() -> None:
@@ -331,7 +375,8 @@ def initialize_session_state() -> None:
                 "validation_errors": {"guide1": {}, "guide2": {}, "guide3": {}},
                 "current_step": 1,
                 "language_selector": "Español",
-                "initialized": True
+                "initialized": True,
+                "session_id": str(uuid.uuid4())
             }
             
             # Initialize response keys
@@ -352,7 +397,7 @@ def initialize_session_state() -> None:
             
             # Check for trauma based on existing responses
             update_trauma_status(st.session_state.responses, LANGUAGES["es" if st.session_state.language_selector == "Español" else "en"])
-            logger.debug("Session state initialized successfully.")
+            logger.info(f"Session state initialized with session_id: {st.session_state.session_id}")
     except Exception as e:
         logger.error(f"Error initializing session state: {str(e)}")
         st.error(f"Failed to initialize application: {str(e)}")
@@ -531,91 +576,83 @@ def render_sidebar(lang_code: str) -> None:
     t = LANGUAGES[lang_code]
     try:
         with st.sidebar:
-            try:
-                st.markdown(f'<h3 class="subheader">Opciones</h3>', unsafe_allow_html=True)
-                logger.debug("Rendering language selector")
-                
-                def on_language_change():
-                    try:
-                        new_lang = st.session_state.get("language_selector", "Español")
-                        old_lang_code = "es" if new_lang != "Español" else "en"
-                        new_lang_code = "es" if new_lang == "Español" else "en"
-                        old_t = LANGUAGES[old_lang_code]
-                        new_t = LANGUAGES[new_lang_code]
-                        
-                        # Map responses to new language
-                        for q in GUIDE1_QUESTIONS:
-                            if q["type"] == "yes_no":
-                                current_response = st.session_state.responses.get(q["id"])
-                                if current_response == old_t["yes"]:
-                                    st.session_state.responses[q["id"]] = new_t["yes"]
-                                elif current_response == old_t["no"]:
-                                    st.session_state.responses[q["id"]] = new_t["no"]
-                        for q in GUIDE2_QUESTIONS + GUIDE3_QUESTIONS:
-                            old_responses = get_valid_responses(old_lang_code)
-                            new_responses = get_valid_responses(new_lang_code)
+            st.markdown(f'<h3 class="subheader">Opciones</h3>', unsafe_allow_html=True)
+            
+            def on_language_change():
+                try:
+                    new_lang = st.session_state.get("language_selector", "Español")
+                    old_lang_code = "es" if new_lang != "Español" else "en"
+                    new_lang_code = "es" if new_lang == "Español" else "en"
+                    old_t = LANGUAGES[old_lang_code]
+                    new_t = LANGUAGES[new_lang_code]
+                    
+                    # Map responses to new language
+                    for q in GUIDE1_QUESTIONS:
+                        if q["type"] == "yes_no":
                             current_response = st.session_state.responses.get(q["id"])
-                            if current_response in old_responses:
-                                idx = old_responses.index(current_response)
-                                st.session_state.responses[q["id"]] = new_responses[idx]
-                        
-                        update_trauma_status(st.session_state.responses, new_t)
-                        logger.debug(f"Language changed to {new_lang}")
-                    except Exception as e:
-                        logger.error(f"Error in on_language_change: {str(e)}")
-                        st.error(f"{t['unexpected_error'].format(error=str(e))} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Language change failed"))
+                            if current_response == old_t["yes"]:
+                                st.session_state.responses[q["id"]] = new_t["yes"]
+                            elif current_response == old_t["no"]:
+                                st.session_state.responses[q["id"]] = new_t["no"]
+                    for q in GUIDE2_QUESTIONS + GUIDE3_QUESTIONS:
+                        old_responses = get_valid_responses(old_lang_code)
+                        new_responses = get_valid_responses(new_lang_code)
+                        current_response = st.session_state.responses.get(q["id"])
+                        if current_response in old_responses:
+                            idx = old_responses.index(current_response)
+                            st.session_state.responses[q["id"]] = new_responses[idx]
+                    
+                    update_trauma_status(st.session_state.responses, new_t)
+                    logger.info(f"Language changed to {new_lang} for session {st.session_state.session_id}")
+                except Exception as e:
+                    logger.error(f"Error in on_language_change: {str(e)}")
+                    st.error(f"{t['unexpected_error'].format(error='Language change failed')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Language change failed"))
 
-                st.selectbox(
-                    "Language / Idioma",
-                    ["Español", "English"],
-                    key="language_selector",
-                    on_change=on_language_change,
-                    label="Select Language"
-                )
-            except Exception as e:
-                logger.error(f"Failed to render language selector: {str(e)}")
-                st.warning("Language selector failed to load.")
+            st.selectbox(
+                "Language / Idioma",
+                ["Español", "English"],
+                key="language_selector",
+                on_change=on_language_change,
+                label="Select Language"
+            )
 
-            try:
-                st.markdown(f'<h3 class="subheader">{t["download_log"]}</h3>', unsafe_allow_html=True)
-                password_download = st.text_input(
-                    t["password_prompt"],
-                    type="password",
-                    key="download_password",
-                    label="Download Password"
-                )
-                if st.button(t["download_log"], key="download_button"):
-                    if action_lock():
+            st.markdown(f'<h3 class="subheader">{t["download_log"]}</h3>', unsafe_allow_html=True)
+            password_download = st.text_input(
+                t["password_prompt"],
+                type="password",
+                key="download_password",
+                label="Download Password"
+            )
+            if st.button(t["download_log"], key="download_button"):
+                if action_lock():
+                    try:
                         hashed_input = hash_password(password_download, SALT)
                         if hashed_input == CORRECT_PASSWORD_HASH:
-                            try:
-                                if not os.path.exists(LOG_FILE) or os.path.getsize(LOG_FILE) == 0:
-                                    st.warning(t["file_not_found"])
-                                else:
-                                    with open(LOG_FILE, "rb") as f:
-                                        csv_bytes = f.read()
-                                    b64 = base64.b64encode(csv_bytes).decode()
-                                    href = f'<a href="data:file/csv;base64,{b64}" download="nom035_log.csv" role="button" aria-label="Download Log CSV">Download Log CSV</a>'
-                                    st.markdown(href, unsafe_allow_html=True)
-                            except (FileNotFoundError, IOError) as e:
-                                logger.error(f"Failed to download log: {str(e)}")
+                            log_path = Path(LOG_FILE)
+                            if not log_path.exists() or log_path.stat().st_size == 0:
                                 st.warning(t["file_not_found"])
+                            else:
+                                with log_path.open("rb") as f:
+                                    csv_bytes = f.read()
+                                b64 = base64.b64encode(csv_bytes).decode()
+                                href = f'<a href="data:file/csv;base64,{b64}" download="nom035_log.csv" role="button" aria-label="Download Log CSV">Download Log CSV</a>'
+                                st.markdown(href, unsafe_allow_html=True)
                         else:
                             st.error(t["incorrect_password"])
-            except Exception as e:
-                logger.error(f"Failed to render download log section: {str(e)}")
-                st.warning("Download log section failed to load.")
+                    except Exception as e:
+                        logger.error(f"Failed to download log: {str(e)}")
+                        st.error(f"{t['unexpected_error'].format(error='Log download failed')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Log download failed"))
 
-            try:
-                st.markdown(f'<h3 class="subheader">{t["refresh_log"]}</h3>', unsafe_allow_html=True)
-                password_refresh = st.text_input(
-                    t["password_prompt"],
-                    type="password",
-                    key="refresh_password",
-                    label="Refresh Password"
-                )
-                if st.button(t["refresh_log"], key="refresh_button"):
-                    if action_lock():
+            st.markdown(f'<h3 class="subheader">{t["refresh_log"]}</h3>', unsafe_allow_html=True)
+            password_refresh = st.text_input(
+                t["password_prompt"],
+                type="password",
+                key="refresh_password",
+                label="Refresh Password"
+            )
+            if st.button(t["refresh_log"], key="refresh_button"):
+                if action_lock():
+                    try:
                         hashed_input = hash_password(password_refresh, SALT)
                         if hashed_input == CORRECT_PASSWORD_HASH:
                             if refresh_log():
@@ -624,12 +661,12 @@ def render_sidebar(lang_code: str) -> None:
                                 st.error("Failed to refresh log.")
                         else:
                             st.error(t["incorrect_password"])
-            except Exception as e:
-                logger.error(f"Failed to render refresh log section: {str(e)}")
-                st.warning("Refresh log section failed to load.")
+                    except Exception as e:
+                        logger.error(f"Failed to refresh log: {str(e)}")
+                        st.error(f"{t['unexpected_error'].format(error='Log refresh failed')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Log refresh failed"))
     except Exception as e:
         logger.error(f"Error rendering sidebar: {str(e)}")
-        st.error(f"{t['unexpected_error'].format(error=str(e))} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Sidebar rendering failed"))
+        st.error(f"{t['unexpected_error'].format(error='Sidebar rendering failed')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Sidebar rendering failed"))
 
 def action_lock() -> bool:
     """Prevent rapid button clicks with a 1-second debounce."""
@@ -695,13 +732,13 @@ def validate_responses(responses: Dict, guide_questions: List, guide_id: str, is
                                 logger.debug(f"Validation failed for {subfield['id']}: Value='{value}'")
         
             # Validate age
-            age = responses.get("g1_q2", 0)
+            age = responses.get("g1_q2")
             if not isinstance(age, (int, float)) or not (18 <= age <= 100):
                 errors["g1_q2"] = t["invalid_age"]
                 logger.debug(f"Validation failed for g1_q2: Value='{age}'")
         
             # Validate years worked
-            years_worked = responses.get("g1_q4", 0)
+            years_worked = responses.get("g1_q4")
             if isinstance(age, (int, float)) and isinstance(years_worked, (int, float)) and not (0 <= years_worked <= age):
                 errors["g1_q4"] = t["invalid_years_worked"]
                 logger.debug(f"Validation failed for g1_q4: Value='{years_worked}'")
@@ -735,7 +772,7 @@ def validate_responses(responses: Dict, guide_questions: List, guide_id: str, is
         return errors
     except Exception as e:
         logger.error(f"Error in validate_responses: {str(e)}")
-        st.error(f"{t['unexpected_error'].format(error=str(e))} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Validation failed"))
+        st.error(f"{t['unexpected_error'].format(error='Validation failed')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Validation failed"))
         return {}
 
 def render_question(q: Dict, lang_code: str, t: Dict, guide_id: str) -> None:
@@ -774,7 +811,7 @@ def render_question(q: Dict, lang_code: str, t: Dict, guide_id: str) -> None:
                 key=q["id"],
                 format="%d",
                 label_visibility="collapsed",
-                value=int(st.session_state.responses.get(q["id"], 0)),
+                value=int(st.session_state.responses.get(q["id"], 0) or 0),
                 disabled=st.session_state.get(f"{guide_id}_complete", False)
             )
             st.session_state.responses[q["id"]] = response
@@ -824,7 +861,7 @@ def render_question(q: Dict, lang_code: str, t: Dict, guide_id: str) -> None:
         st.markdown('</div>', unsafe_allow_html=True)
     except Exception as e:
         logger.error(f"Error rendering question {q['id']}: {str(e)}")
-        st.error(f"{t['unexpected_error'].format(error=str(e))} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Question rendering failed"))
+        st.error(f"{t['unexpected_error'].format(error='Question rendering failed')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Question rendering failed"))
 
 # Main App
 def main():
@@ -841,7 +878,7 @@ def main():
         st.write(t["welcome"])
 
         progress = calculate_progress()
-        st.progress(progress)
+        st.progress(min(progress, 1.0))  # Ensure progress doesn't exceed 100%
         st.markdown(f'<p class="tooltip">{t["progress"]}: {int(progress * 100)}%</p>', unsafe_allow_html=True)
 
         # Guide I
@@ -868,15 +905,19 @@ def main():
             with col2:
                 if st.button(t["submit"], key="submit_guide1"):
                     if action_lock():
-                        errors = validate_responses(st.session_state.responses, GUIDE1_QUESTIONS, "guide1", is_guide1=True, lang_code=lang_code)
-                        if errors:
-                            for error in errors.values():
-                                st.error(error)
-                        else:
-                            st.session_state.guide1_complete = True
-                            if not st.session_state.has_trauma:
-                                save_responses_to_log(st.session_state.responses)
-                            st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
+                        try:
+                            errors = validate_responses(st.session_state.responses, GUIDE1_QUESTIONS, "guide1", is_guide1=True, lang_code=lang_code)
+                            if errors:
+                                for error in errors.values():
+                                    st.error(error)
+                            else:
+                                st.session_state.guide1_complete = True
+                                if not st.session_state.has_trauma:
+                                    save_responses_to_log(st.session_state.responses)
+                                st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
+                        except Exception as e:
+                            logger.error(f"Error submitting Guide 1: {str(e)}")
+                            st.error(f"{t['unexpected_error'].format(error='Guide 1 submission failed')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Guide 1 submission failed"))
 
         # Guide II
         elif st.session_state.guide1_complete and st.session_state.has_trauma and not st.session_state.guide2_complete:
@@ -907,13 +948,17 @@ def main():
             with col2:
                 if st.button(t["submit"], key="submit_guide2"):
                     if action_lock():
-                        errors = validate_responses(st.session_state.responses, GUIDE2_QUESTIONS, "guide2", lang_code=lang_code)
-                        if errors:
-                            for error in errors.values():
-                                st.error(error)
-                        else:
-                            st.session_state.guide2_complete = True
-                            st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
+                        try:
+                            errors = validate_responses(st.session_state.responses, GUIDE2_QUESTIONS, "guide2", lang_code=lang_code)
+                            if errors:
+                                for error in errors.values():
+                                    st.error(error)
+                            else:
+                                st.session_state.guide2_complete = True
+                                st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
+                        except Exception as e:
+                            logger.error(f"Error submitting Guide 2: {str(e)}")
+                            st.error(f"{t['unexpected_error'].format(error='Guide 2 submission failed')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Guide 2 submission failed"))
 
         # Guide III
         elif st.session_state.guide2_complete and st.session_state.has_trauma and not st.session_state.guide3_complete:
@@ -934,19 +979,23 @@ def main():
             with col2:
                 if st.button(t["submit"], key="submit_guide3"):
                     if action_lock():
-                        errors = validate_responses(st.session_state.responses, GUIDE3_QUESTIONS, "guide3", lang_code=lang_code)
-                        if errors:
-                            for error in errors.values():
-                                st.error(error)
-                        else:
-                            st.session_state.guide3_complete = True
-                            save_responses_to_log(st.session_state.responses)
-                            st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
+                        try:
+                            errors = validate_responses(st.session_state.responses, GUIDE3_QUESTIONS, "guide3", lang_code=lang_code)
+                            if errors:
+                                for error in errors.values():
+                                    st.error(error)
+                            else:
+                                st.session_state.guide3_complete = True
+                                save_responses_to_log(st.session_state.responses)
+                                st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
+                        except Exception as e:
+                            logger.error(f"Error submitting Guide 3: {str(e)}")
+                            st.error(f"{t['unexpected_error'].format(error='Guide 3 submission failed')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Guide 3 submission failed"))
 
         st.markdown('</div>', unsafe_allow_html=True)
     except Exception as e:
         logger.error(f"Unexpected error in main: {str(e)}")
-        st.error(f"{t['unexpected_error'].format(error=str(e))} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Application failed to load"))
+        st.error(f"{t['unexpected_error'].format(error='Application failed to load')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Application failed to load"))
 
 if __name__ == "__main__":
     main()
