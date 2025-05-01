@@ -16,7 +16,7 @@ st.set_page_config(page_title="🧠 NOM-035 Guía I y II", layout="centered")
 
 # Access keys (Note: Use environment variables in production for security)
 ACCESS_KEY = "NOM035_ACCESS_2025"
-RESET_PASSWORD = "ATTLE
+RESET_PASSWORD = "NOM05"
 
 # Initialize session state
 if "responses" not in st.session_state:
