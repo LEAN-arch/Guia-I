@@ -16,7 +16,26 @@ st.set_page_config(page_title="🧠 NOM-035 Guía I y II", layout="centered")
 
 # Access keys (Note: Use environment variables in production for security)
 ACCESS_KEY = "NOM035_ACCESS_2025"
-RESET_PASSWORD = "NOM05"
+RESET_PASSWORD = "RESET_NOM035_2025"
+
+# Custom CSS for button styling
+st.markdown("""
+<style>
+.stButton>button {
+    margin: 5px;
+}
+.primary-button {
+    background-color: #28a745;
+    color: white;
+    border-radius: 5px;
+}
+.secondary-button {
+    background-color: #6c757d;
+    color: white;
+    border-radius: 5px;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # Initialize session state
 if "responses" not in st.session_state:
@@ -222,7 +241,8 @@ def reset_data(password, temp_dir):
         st.error("🔐 Contraseña incorrecta para reiniciar datos.")
 
 # Function to check positive responses in Guía I
-def has_positive_response_guia_i(row, symptom_cols):
+def has_positive_response_guia_i(row):
+    symptom_cols = [item[0] for section in guia_i_questions[1:] for item in section["items"]]
     return any(row.get(col, 'No') == 'Sí' for col in symptom_cols)
 
 # Function to calculate Guía II risk score
@@ -312,10 +332,10 @@ def generate_statistical_analysis(df):
     guia_i_analysis = {}
     guia_ii_analysis = {}
     
-    guia_i_symptom_cols = [q["items"][0][0] for q in guia_i_questions[1:]]
-    if any(col in df.columns for col in guia_i_symptom_cols):
+    symptom_cols = [item[0] for section in guia_i_questions[1:] for item in section["items"]]
+    if any(col in df.columns for col in symptom_cols):
         guia_i_analysis['Total Empleados'] = len(df)
-        df['Respuesta Positiva (Guía I)'] = df.apply(lambda row: has_positive_response_guia_i(row, guia_i_symptom_cols), axis=1)
+        df['Respuesta Positiva (Guía I)'] = df.apply(has_positive_response_guia_i, axis=1)
         positive_responses = df['Respuesta Positiva (Guía I)'].sum()
         guia_i_analysis['Empleados con Respuestas Positivas'] = positive_responses
         guia_i_analysis['Porcentaje con Respuestas Positivas'] = (positive_responses / len(df)) * 100
@@ -334,7 +354,7 @@ def generate_statistical_analysis(df):
             gender_positive = df[df['Respuesta Positiva (Guía I)'] == True]['¿Cuál es tu género?'].value_counts().to_dict()
             guia_i_analysis['Respuestas Positivas por Género'] = gender_positive
     
-    guia_ii_cols = [q["items"][0][0] for q in guia_ii_questions for _ in q["items"]]
+    guia_ii_cols = [item[0] for section in guia_ii_questions for item in section["items"]]
     domain_questions = {section["section"]: [item[0] for item in section["items"]] for section in guia_ii_questions}
     
     if any(col in df.columns for col in guia_ii_cols):
@@ -501,24 +521,33 @@ if section == "📋 Evaluación":
                             elif isinstance(tipo, list):
                                 respuestas[q] = st.radio("", tipo, horizontal=True, key=f"gi_q{idx}_{q}")
                 
-                enviar = st.form_submit_button("✅ Enviar Guía I")
+                col1, col2 = st.columns(2)
+                with col1:
+                    enviar = st.form_submit_button("✅ Enviar Guía I", help="Enviar respuestas de Guía I", type="primary")
+                with col2:
+                    cancelar = st.form_submit_button("❌ Cancelar", help="Limpiar formulario",八年type="secondary")
+                
                 if enviar:
                     try:
                         if all(v != "" and v is not None for v in respuestas.values()):
                             st.session_state.guia_i_responses = respuestas
-                            symptom_cols = [q["items"][0][0] for q in guia_i_questions[1:]]
-                            has_positive = any(respuestas.get(col) == "Sí" for col in symptom_cols)
+                            has_positive = has_positive_response_guia_i(respuestas)
                             st.session_state.show_guia_ii = has_positive
                             if not has_positive:
                                 st.session_state.responses.append(respuestas)
                                 log_response(respuestas, temp_dir)
                                 st.success("✅ ¡Evaluación Guía I completada! No se requiere Guía II.")
                             else:
-                                st.success("✅ Guía I enviada. Por favor complete la Guía II.")
+                                st.success("✅ Guía I enviada. Se detectaron respuestas positivas, por favor complete la Guía II.")
                         else:
                             st.warning("⚠️ Responde todas las preguntas antes de enviar.")
                     except Exception as e:
                         st.error(f"❌ Error al procesar la evaluación: {str(e)}")
+                
+                if cancelar:
+                    st.session_state.guia_i_responses = None
+                    st.success("✅ Formulario de Guía I limpiado.")
+                    st.rerun()
         else:
             with st.form("guia_ii_form"):
                 respuestas = st.session_state.guia_i_responses.copy()
@@ -528,7 +557,14 @@ if section == "📋 Evaluación":
                             st.markdown(f"**{q}**")
                             respuestas[q] = st.radio("", tipo, horizontal=True, key=f"gii_q{idx}_{q}")
                 
-                enviar = st.form_submit_button("✅ Enviar Guía II")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    enviar = st.form_submit_button("✅ Enviar Guía II", help="Enviar respuestas de Guía II", type="primary")
+                with col2:
+                    volver = st.form_submit_button("⬅️ Volver a Guía I", help="Editar respuestas de Guía I", type="secondary")
+                with col3:
+                    cancelar = st.form_submit_button("❌ Cancelar", help="Limpiar formulario", type="secondary")
+                
                 if enviar:
                     try:
                         if all(v != "" and v is not None for v in respuestas.values()):
@@ -541,6 +577,17 @@ if section == "📋 Evaluación":
                             st.warning("⚠️ Responde todas las preguntas antes de enviar.")
                     except Exception as e:
                         st.error(f"❌ Error al procesar la evaluación: {str(e)}")
+                
+                if volver:
+                    st.session_state.show_guia_ii = False
+                    st.success("✅ Volviendo a Guía I para editar respuestas.")
+                    st.rerun()
+                
+                if cancelar:
+                    st.session_state.guia_i_responses = None
+                    st.session_state.show_guia_ii = False
+                    st.success("✅ Formulario de Guía II limpiado.")
+                    st.rerun()
 
 # Download report section
 elif section == "📥 Descargar Reporte":
