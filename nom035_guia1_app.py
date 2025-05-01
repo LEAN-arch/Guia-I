@@ -15,6 +15,11 @@ import time
 import logging
 from dotenv import load_dotenv
 
+# Load environment variables from .env file for secure password management
+load_dotenv()
+ACCESS_KEY = os.getenv("NOM035_ACCESS_KEY", "NOM035_ACCESS_2025")
+RESET_PASSWORD = os.getenv("NOM035_RESET_PASSWORD", "RESET_NOM035_2025")
+
 # Validate environment variables
 if not ACCESS_KEY or len(ACCESS_KEY) < 8:
     logger.warning("NOM035_ACCESS_KEY is missing or too short. Using fallback.")
@@ -70,6 +75,16 @@ st.markdown("""
 [role="radiogroup"] {
     margin-bottom: 15px;
 }
+.stExpander {
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    margin-bottom: 10px;
+}
+.progress-text {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -78,7 +93,8 @@ def initialize_session_state():
     defaults = {
         "responses": [],
         "show_guia_ii": False,
-        "guia_i_responses": None,
+        "guia_i_responses": {},
+        "guia_ii_responses": {},
         "session_initialized": False,
         "form_error": None
     }
@@ -88,7 +104,8 @@ def initialize_session_state():
     if not st.session_state.session_initialized:
         st.session_state.responses = []
         st.session_state.show_guia_ii = False
-        st.session_state.guia_i_responses = None
+        st.session_state.guia_i_responses = {}
+        st.session_state.guia_ii_responses = {}
         st.session_state.session_initialized = True
         logger.info("Session state initialized")
 
@@ -269,7 +286,7 @@ def validate_form(responses, questions):
     for section_data in questions:
         for q, tipo, params in section_data["items"]:
             value = responses.get(q)
-            if value is None:
+            if value is None or (isinstance(value, str) and not value.strip()):
                 errors.append(f"Falta respuesta para: {q}")
                 continue
             if tipo == "text":
@@ -288,9 +305,15 @@ def validate_form(responses, questions):
                 errors.append(f"Selección inválida para: {q}")
     return len(errors) == 0, errors
 
+def calculate_progress(responses, questions):
+    """Calculate the number of answered questions."""
+    total_questions = sum(len(section["items"]) for section in questions)
+    answered_questions = sum(1 for q in responses if responses[q] is not None and (not isinstance(responses[q], str) or responses[q].strip()))
+    return answered_questions, total_questions
+
 @st.cache_data
 def log_response(response, temp_dir, max_retries=3):
-    """Log responses with retry mechanism."""
+    """Log responses with retry mechanism and exponential backoff."""
     for attempt in range(max_retries):
         try:
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -307,20 +330,21 @@ def log_response(response, temp_dir, max_retries=3):
             if attempt == max_retries - 1:
                 logger.error("Failed to write to log file due to permissions")
                 return False
-            time.sleep(0.5)
+            time.sleep(2 ** attempt)
         except Exception as e:
             if attempt == max_retries - 1:
                 logger.error(f"Failed to log response: {str(e)}")
                 return False
-            time.sleep(0.5)
+            time.sleep(2 ** attempt)
     return False
 
 def reset_data(password, temp_dir):
-    """Reset all data and logs."""
+    """Reset all data and logs if password matches RESET_PASSWORD from .env."""
     if password == RESET_PASSWORD:
         st.session_state.responses = []
         st.session_state.show_guia_ii = False
-        st.session_state.guia_i_responses = None
+        st.session_state.guia_i_responses = {}
+        st.session_state.guia_ii_responses = {}
         st.session_state.session_initialized = True
         try:
             log_file = os.path.join(temp_dir, 'responses_log.csv')
@@ -734,29 +758,40 @@ if section == "📋 Evaluación":
         if not st.session_state.show_guia_ii:
             with st.form("guia_i_form"):
                 st.header("Guía I: Identificación de Eventos Traumáticos")
-                respuestas = st.session_state.guia_i_responses or {}
+                respuestas = st.session_state.guia_i_responses
+                
+                # Display progress
+                answered, total = calculate_progress(respuestas, guia_i_questions)
+                st.markdown(f"<div class='progress-text'>Progreso: {answered}/{total} preguntas respondidas</div>", unsafe_allow_html=True)
                 
                 for section_data in guia_i_questions:
-                    st.subheader(section_data["section"])
-                    for idx, (q, tipo, params) in enumerate(section_data["items"]):
-                        st.markdown(f"**{q}**")
-                        if tipo == "text":
-                            respuestas[q] = st.text_input("", key=f"gi_q{idx}_{q}", value=respuestas.get(q, ""),
-                                                        max_chars=params.get("max_length"), help=f"Ingrese {q.lower()}")
-                        elif tipo == "number":
-                            min_val = params.get("min_value", 0)
-                            default_val = max(min_val, respuestas.get(q, min_val))
-                            respuestas[q] = st.number_input("", min_value=min_val,
-                                                         max_value=params.get("max_value", 1000), step=1,
-                                                         key=f"gi_q{idx}_{q}", value=default_val,
-                                                         help=f"Ingrese un número para {q.lower()}")
-                        elif isinstance(tipo, list):
-                            respuestas[q] = st.radio("", tipo, horizontal=True, key=f"gi_q{idx}_{q}",
-                                                   index=tipo.index(respuestas.get(q)) if respuestas.get(q) in tipo else 0,
-                                                   help=f"Seleccione una opción para {q.lower()}",
-                                                   label_visibility="collapsed")
+                    with st.expander(section_data["section"], expanded=True):
+                        for idx, (q, tipo, params) in enumerate(section_data["items"]):
+                            st.markdown(f"**{q}**")
+                            if tipo == "text":
+                                respuestas[q] = st.text_input("", key=f"gi_q{idx}_{q}", value=responses.get(q, ""),
+                                                            max_chars=params.get("max_length"), help=f"Ingrese {q.lower()}",
+                                                            placeholder=f"Ingrese {q.lower()}", label_visibility="collapsed")
+                            elif tipo == "number":
+                                min_val = params.get("min_value", 0)
+                                default_val = max(min_val, respuestas.get(q, min_val))
+                                respuestas[q] = st.number_input("", min_value=min_val,
+                                                             max_value=params.get("max_value", 1000), step=1,
+                                                             key=f"gi_q{idx}_{q}", value=default_val,
+                                                             help=f"Ingrese un número para {q.lower()}",
+                                                             label_visibility="collapsed")
+                            elif isinstance(tipo, list):
+                                respuestas[q] = st.radio("", tipo, horizontal=True, key=f"gi_q{idx}_{q}",
+                                                       index=tipo.index(respuestas.get(q)) if respuestas.get(q) in tipo else 0,
+                                                       help=f"Seleccione una opción para {q.lower()}",
+                                                       label_visibility="collapsed",
+                                                       caption=f"Seleccione una opción para {q.lower()}")
                 
-                submit_button = st.form_submit_button("✅ Enviar Guía I", help="Enviar respuestas de Guía I", type="primary")
+                col1, col2 = st.columns(2)
+                with col1:
+                    submit_button = st.form_submit_button("✅ Enviar Guía I", help="Enviar respuestas de Guía I", type="primary")
+                with col2:
+                    clear_button = st.form_submit_button("🗑️ Limpiar Formulario", help="Borrar todas las respuestas del formulario")
                 
                 if submit_button:
                     try:
@@ -769,21 +804,27 @@ if section == "📋 Evaluación":
                                 st.session_state.responses.append(respuestas)
                                 if log_response(respuestas, temp_dir):
                                     st.success("✅ ¡Evaluación Guía I completada! No se requiere Guía II.")
-                                    st.session_state.guia_i_responses = None
+                                    st.session_state.guia_i_responses = {}
                                 else:
-                                    st.session_state.form_error = "Error al guardar respuestas, por favor intenta de nuevo."
+                                    st.session_state.form_error = "Error al guardar respuestas. Por favor, intenta de nuevo."
                                     st.error(st.session_state.form_error)
                             else:
                                 st.success("✅ Guía I enviada. Se detectaron respuestas positivas, por favor complete la Guía II.")
+                                st.session_state.guia_ii_responses = respuestas.copy()
                                 st.rerun()
                         else:
-                            st.warning("⚠️ Corrija los siguientes errores:")
+                            st.warning("⚠️ Por favor, corrija los siguientes errores:")
                             for error in errors:
                                 st.write(f"- {error}")
                     except Exception as e:
                         logger.error(f"Error processing Guía I submission: {str(e)}")
-                        st.session_state.form_error = str(e)
-                        st.error(f"❌ Error al procesar la evaluación: {str(e)}")
+                        st.session_state.form_error = f"Error al procesar la evaluación: {str(e)}"
+                        st.error(st.session_state.form_error)
+                
+                if clear_button:
+                    st.session_state.guia_i_responses = {}
+                    st.success("🗑️ Formulario limpiado.")
+                    st.rerun()
                 
                 if st.session_state.form_error:
                     if st.form_submit_button("🔄 Reintentar", help="Reintentar el envío"):
@@ -792,18 +833,27 @@ if section == "📋 Evaluación":
         else:
             with st.form("guia_ii_form"):
                 st.header("Guía II: Factores de Riesgo Psicosocial")
-                respuestas = st.session_state.guia_i_responses.copy() if st.session_state.guia_i_responses else {}
+                respuestas = st.session_state.guia_ii_responses
+                
+                # Display progress
+                answered, total = calculate_progress(respuestas, guia_i_questions + guia_ii_questions)
+                st.markdown(f"<div class='progress-text'>Progreso: {answered}/{total} preguntas respondidas</div>", unsafe_allow_html=True)
                 
                 for section_data in guia_ii_questions:
-                    st.subheader(section_data["section"])
-                    for idx, (q, tipo, params) in enumerate(section_data["items"]):
-                        st.markdown(f"**{q}**")
-                        respuestas[q] = st.radio("", tipo, horizontal=True, key=f"gii_q{idx}_{q}",
-                                               index=tipo.index(respuestas.get(q)) if respuestas.get(q) in tipo else 0,
-                                               help=f"Seleccione una opción para {q.lower()}",
-                                               label_visibility="collapsed")
+                    with st.expander(section_data["section"], expanded=True):
+                        for idx, (q, tipo, params) in enumerate(section_data["items"]):
+                            st.markdown(f"**{q}**")
+                            respuestas[q] = st.radio("", tipo, horizontal=True, key=f"gii_q{idx}_{q}",
+                                                   index=tipo.index(respuestas.get(q)) if respuestas.get(q) in tipo else 0,
+                                                   help=f"Seleccione una opción para {q.lower()}",
+                                                   label_visibility="collapsed",
+                                                   caption=f"Seleccione una opción para {q.lower()}")
                 
-                submit_button = st.form_submit_button("✅ Enviar Guía II", help="Enviar respuestas de Guía II", type="primary")
+                col1, col2 = st.columns(2)
+                with col1:
+                    submit_button = st.form_submit_button("✅ Enviar Guía II", help="Enviar respuestas de Guía II", type="primary")
+                with col2:
+                    clear_button = st.form_submit_button("🗑️ Limpiar Formulario", help="Borrar todas las respuestas del formulario")
                 
                 if submit_button:
                     try:
@@ -812,19 +862,25 @@ if section == "📋 Evaluación":
                             st.session_state.responses.append(respuestas)
                             if log_response(respuestas, temp_dir):
                                 st.session_state.show_guia_ii = False
-                                st.session_state.guia_i_responses = None
+                                st.session_state.guia_i_responses = {}
+                                st.session_state.guia_ii_responses = {}
                                 st.success("✅ ¡Evaluación Guía I y II completada exitosamente!")
                             else:
-                                st.session_state.form_error = "Error al guardar respuestas, por favor intenta de nuevo."
+                                st.session_state.form_error = "Error al guardar respuestas. Por favor, intenta de nuevo."
                                 st.error(st.session_state.form_error)
                         else:
-                            st.warning("⚠️ Corrija los siguientes errores:")
+                            st.warning("⚠️ Por favor, corrija los siguientes errores:")
                             for error in errors:
                                 st.write(f"- {error}")
                     except Exception as e:
                         logger.error(f"Error processing Guía II submission: {str(e)}")
-                        st.session_state.form_error = str(e)
-                        st.error(f"❌ Error al procesar la evaluación: {str(e)}")
+                        st.session_state.form_error = f"Error al procesar la evaluación: {str(e)}"
+                        st.error(st.session_state.form_error)
+                
+                if clear_button:
+                    st.session_state.guia_ii_responses = st.session_state.guia_i_responses.copy()
+                    st.success("🗑️ Formulario limpiado.")
+                    st.rerun()
                 
                 if st.session_state.form_error:
                     if st.form_submit_button("🔄 Reintentar", help="Reintentar el envío"):
@@ -835,7 +891,8 @@ if section == "📋 Evaluación":
 elif section == "📥 Descargar Reporte":
     st.title("📥 Reporte Consolidado")
     
-    access_key = st.text_input("🔑 Ingrese la clave de acceso:", type="password", help="Ingrese la clave para descargar el reporte")
+    access_key = st.text_input("🔑 Ingrese la clave de acceso:", type="password", help="Ingrese la clave para descargar el reporte",
+                              placeholder="Clave de acceso", label_visibility="visible")
     
     if st.session_state.responses and access_key == ACCESS_KEY:
         try:
@@ -1012,7 +1069,8 @@ elif section == "🔄 Reiniciar Datos":
     
     with tempfile.TemporaryDirectory() as temp_dir:
         with st.form("reset_form"):
-            reset_password = st.text_input("🔑 Contraseña para reiniciar:", type="password", help="Ingrese la contraseña para reiniciar los datos")
+            reset_password = st.text_input("🔑 Contraseña para reiniciar:", type="password", help="Ingrese la contraseña para reiniciar los datos",
+                                         placeholder="Contraseña de reinicio", label_visibility="visible")
             reset_button = st.form_submit_button("🔄 Reiniciar", help="Reiniciar todos los datos")
             
             if reset_button:
