@@ -1258,56 +1258,56 @@ elif section == "📥 Descargar Reporte":
                         for r, idx in enumerate(gender_risk_iv.index, start=row):
                             ws_stats.cell(r, 1).value = idx
                             for c, col in enumerate(gender_risk_iv.columns, start=2):
-                                                        ws_stats.cell(row, c).value = col
-                                                    row += 1
-                                                    for r, idx in enumerate(gender_risk_iv.index, start=row):
-                                                        ws_stats.cell(r, 1).value = idx
-                                                        for c, col in enumerate(gender_risk_iv.columns, start=2):
-                                                            ws_stats.cell(r, c).value = gender_risk_iv.loc[idx, col]
-                                                    row += len(gender_risk_iv) + 2
-                            
-                                                # Save workbook
-                                                excel_path = os.path.join(temp_dir, "NOM035_Reporte.xlsx")
-                                                wb.save(excel_path)
-                            
-                                                # Provide download button
-                                                with open(excel_path, "rb") as file:
-                                                    st.download_button(
-                                                        label="📥 Descargar Reporte Excel",
-                                                        data=file,
-                                                        file_name="NOM035_Reporte.xlsx",
-                                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                                    )
-                            
-                                                # Display recommendations
-                                                st.subheader("📋 Recomendaciones")
-                                                for rec in recommendations:
-                                                    st.write(f"- {rec}")
-                            
-                                                # Display visualizations
-                                                st.subheader("📊 Visualizaciones")
-                                                for vis_type, title, path in visualizations:
-                                                    st.markdown(f"**{title}**")
-                                                    if vis_type != 'Text':
-                                                        st.image(path, use_column_width=True)
-                                                    else:
-                                                        st.write(path)
-                            
-                                        except Exception as e:
-                                            logger.error(f"Error generating report: {str(e)}")
-                                            st.error(f"❌ Error al generar el reporte: {str(e)}")
-                                else:
-                                    st.error("🔐 Clave de acceso incorrecta. Contacte al administrador.")
-                            
-                            # Reiniciar Datos
-                            elif section == "🔄 Reiniciar Datos":
-                                st.title("🔄 Reiniciar Datos")
-                                st.warning("⚠️ Esta acción eliminará todas las respuestas almacenadas. Proceda con precaución.")
-                                
-                                password = st.text_input("🔑 Ingrese la contraseña de reinicio:", type="password")
-                                if st.button("🔄 Reiniciar"):
-                                    reset_data(password)
-                            
-                            # Footer
-                            st.markdown("---")
-                            st.markdown("Desarrollado por xAI para la evaluación psicosocial conforme a la NOM-035-STPS-2018.")
+                            ws_stats.cell(row, c).value = col
+                        row += 1
+                        for r, idx in enumerate(gender_risk_iv.index, start=row):
+                            ws_stats.cell(r, 1).value = idx
+                            for c, col in enumerate(gender_risk_iv.columns, start=2):
+                                ws_stats.cell(r, c).value = gender_risk_iv.loc[idx, col]
+                        row += len(gender_risk_iv) + 2
+
+                    # Save workbook
+                    excel_path = os.path.join(temp_dir, "NOM035_Reporte.xlsx")
+                    wb.save(excel_path)
+
+                    # Provide download button
+                    with open(excel_path, "rb") as file:
+                        st.download_button(
+                            label="📥 Descargar Reporte Excel",
+                            data=file,
+                            file_name="NOM035_Reporte.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+
+                    # Display recommendations
+                    st.subheader("📋 Recomendaciones")
+                    for rec in recommendations:
+                        st.write(f"- {rec}")
+
+                    # Display visualizations
+                    st.subheader("📊 Visualizaciones")
+                    for vis_type, title, path in visualizations:
+                        st.markdown(f"**{title}**")
+                        if vis_type != 'Text':
+                            st.image(path, use_column_width=True)
+                        else:
+                            st.write(path)
+
+            except Exception as e:
+                logger.error(f"Error generating report: {str(e)}")
+                st.error(f"❌ Error al generar el reporte: {str(e)}")
+    else:
+        st.error("🔐 Clave de acceso incorrecta. Contacte al administrador.")
+
+# Reiniciar Datos
+elif section == "🔄 Reiniciar Datos":
+    st.title("🔄 Reiniciar Datos")
+    st.warning("⚠️ Esta acción eliminará todas las respuestas almacenadas. Proceda con precaución.")
+    
+    password = st.text_input("🔑 Ingrese la contraseña de reinicio:", type="password")
+    if st.button("🔄 Reiniciar"):
+        reset_data(password)
+
+# Footer
+st.markdown("---")
+st.markdown("Desarrollado por xAI para la evaluación psicosocial conforme a la NOM-035-STPS-2018.")
