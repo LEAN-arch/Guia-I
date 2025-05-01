@@ -443,7 +443,7 @@ if not st.session_state.guide1_complete:
         if st.button(t["reset"], key="reset_guide1"):
             if action_lock():
                 reset_responses("guide1")
-                st.experimental_rerun()
+                st.rerun()
 
 # Guía II: Factores de Riesgo Psicosocial (only if trauma detected)
 if st.session_state.guide1_complete and st.session_state.has_trauma and not st.session_state.guide2_complete:
@@ -459,11 +459,11 @@ if st.session_state.guide1_complete and st.session_state.has_trauma and not st.s
     with col1:
         if page > 0 and st.button("Anterior / Previous", key="prev_guide2"):
             st.session_state.guide2_page -= 1
-            st.experimental_rerun()
+            st.rerun()
     with col3:
         if page < total_pages - 1 and st.button("Siguiente / Next", key="next_guide2"):
             st.session_state.guide2_page += 1
-            st.experimental_rerun()
+            st.rerun()
     
     # Display questions for current page
     current_questions = paginate_questions(GUIDE2_QUESTIONS, page, QUESTIONS_PER_PAGE)
@@ -493,7 +493,7 @@ if st.session_state.guide1_complete and st.session_state.has_trauma and not st.s
             if st.button(t["reset"], key="reset_guide2"):
                 if action_lock():
                     reset_responses("guide2")
-                    st.experimental_rerun()
+                    st.rerun()
 
 # Guía III: Entorno Organizacional Favorable (only if trauma detected)
 if st.session_state.guide2_complete and st.session_state.has_trauma and not st.session_state.guide3_complete:
@@ -509,11 +509,11 @@ if st.session_state.guide2_complete and st.session_state.has_trauma and not st.s
     with col1:
         if page > 0 and st.button("Anterior / Previous", key="prev_guide3"):
             st.session_state.guide3_page -= 1
-            st.experimental_rerun()
+            st.rerun()
     with col3:
         if page < total_pages - 1 and st.button("Siguiente / Next", key="next_guide3"):
             st.session_state.guide3_page += 1
-            st.experimental_rerun()
+            st.rerun()
     
     # Display questions for current page
     current_questions = paginate_questions(GUIDE3_QUESTIONS, page, QUESTIONS_PER_PAGE)
@@ -543,7 +543,7 @@ if st.session_state.guide2_complete and st.session_state.has_trauma and not st.s
             if st.button(t["reset"], key="reset_guide3"):
                 if action_lock():
                     reset_responses("guide3")
-                    st.experimental_rerun()
+                    st.rerun()
 
 # Save responses to CSV
 def save_responses():
