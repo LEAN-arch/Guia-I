@@ -150,81 +150,81 @@ GUIDE1_QUESTIONS = [
 ]
 
 GUIDE2_QUESTIONS = [
-    {"id": "g2_q1", "text": "Mi trabajo requiere gran esfuerzo físico.", "text_en": "My job requires significant physical effort.", "group": "work_conditions"},
-    {"id": "g2_q2", "text": "Me siento expuesto(a) a riesgos físicos en mi trabajo.", "text_en": "I feel exposed to physical risks at work.", "group": "work_conditions"},
-    {"id": "g2_q3", "text": "Manejo herramientas que representan riesgo.", "text_en": "I handle tools that pose a risk.", "group": "work_conditions"},
-    {"id": "g2_q4", "text": "Trabajo en un lugar con ruidos fuertes.", "text_en": "I work in a place with loud noises.", "group": "work_conditions"},
-    {"id": "g2_q5", "text": "Trabajo en un lugar con temperaturas extremas.", "text_en": "I work in a place with extreme temperatures.", "group": "work_conditions"},
-    {"id": "g2_q6", "text": "Estoy expuesto(a) a materiales peligrosos.", "text_en": "I am exposed to hazardous materials.", "group": "work_conditions"},
-    {"id": "g2_q7", "text": "Mi trabajo requiere estar de pie mucho tiempo.", "text_en": "My job requires standing for long periods.", "group": "work_conditions"},
-    {"id": "g2_q8", "text": "Realizo movimientos repetitivos en mi trabajo.", "text_en": "I perform repetitive movements at work.", "group": "work_conditions"},
-    {"id": "g2_q9", "text": "Mi trabajo requiere posturas incómodas.", "text_en": "My job requires uncomfortable postures.", "group": "work_conditions"},
-    {"id": "g2_q10", "text": "Tengo que mover objetos pesados.", "text_en": "I have to move heavy objects.", "group": "work_conditions"},
-    {"id": "g2_q11", "text": "Puedo tomar pausas cuando las necesito.", "text_en": "I can take breaks when needed.", "group": "workload_pace"},
-    {"id": "g2_q12", "text": "Puedo decidir la cantidad de trabajo que realizo.", "text_en": "I can decide the amount of work I do.", "group": "workload_pace"},
-    {"id": "g2_q13", "text": "Tengo libertad para decidir cómo realizar mi trabajo.", "text_en": "I have freedom to decide how to do my job.", "group": "workload_pace"},
-    {"id": "g2_q14", "text": "Mi trabajo requiere decisiones difíciles.", "text_en": "My job requires difficult decisions.", "group": "workload_pace"},
-    {"id": "g2_q15", "text": "Tengo que atender varias tareas a la vez.", "text_en": "I handle multiple tasks at once.", "group": "workload_pace"},
-    {"id": "g2_q16", "text": "Mi trabajo requiere alta concentración.", "text_en": "My job requires high concentration.", "group": "workload_pace"},
-    {"id": "g2_q17", "text": "La cantidad de trabajo es excesiva.", "text_en": "The amount of work is excessive.", "group": "workload_pace"},
-    {"id": "g2_q18", "text": "Trabajo horas extras con frecuencia.", "text_en": "I work overtime frequently.", "group": "workload_pace"},
-    {"id": "g2_q19", "text": "Debo estar disponible fuera de mi horario.", "text_en": "I must be available outside working hours.", "group": "workload_pace"},
-    {"id": "g2_q20", "text": "Mi ritmo de trabajo es muy acelerado.", "text_en": "My work pace is very fast.", "group": "workload_pace"},
-    {"id": "g2_q21", "text": "Mi jefe me presiona para cumplir objetivos.", "text_en": "My boss pressures me to meet goals.", "group": "control_decision"},
-    {"id": "g2_q22", "text": "Recibo órdenes contradictorias.", "text_en": "I receive contradictory orders.", "group": "control_decision"},
-    {"id": "g2_q23", "text": "Mi jefe me da instrucciones claras.", "text_en": "My boss gives clear instructions.", "group": "control_decision"},
-    {"id": "g2_q24", "text": "Mi jefe me apoya en problemas laborales.", "text_en": "My boss supports me with work problems.", "group": "control_decision"},
-    {"id": "g2_q25", "text": "Mi jefe confía en mi capacidad.", "text_en": "My boss trusts my ability.", "group": "control_decision"},
-    {"id": "g2_q26", "text": "Mi jefe me trata con respeto.", "text_en": "My boss treats me with respect.", "group": "work_relationships"},
-    {"id": "g2_q27", "text": "Me siento valorado(a) por mis compañeros.", "text_en": "I feel valued by my colleagues.", "group": "work_relationships"},
-    {"id": "g2_q28", "text": "Tengo buena comunicación con mis compañeros.", "text_en": "I have good communication with coworkers.", "group": "work_relationships"},
-    {"id": "g2_q29", "text": "Hay un ambiente de colaboración.", "text_en": "There is a collaborative environment.", "group": "work_relationships"},
-    {"id": "g2_q30", "text": "Recibo críticas negativas con frecuencia.", "text_en": "I receive negative criticism frequently.", "group": "work_relationships"},
-    {"id": "g2_q31", "text": "Mis compañeros me excluyen.", "text_en": "My colleagues exclude me.", "group": "work_relationships"},
-    {"id": "g2_q32", "text": "He sido víctima de burlas en el trabajo.", "text_en": "I have been a victim of teasing at work.", "group": "work_relationships"},
-    {"id": "g2_q33", "text": "He sido testigo de discriminación.", "text_en": "I have witnessed discrimination.", "group": "work_relationships"},
-    {"id": "g2_q34", "text": "Mi trabajo interfiere con mi familia.", "text_en": "My job interferes with family responsibilities.", "group": "work_life_balance"},
-    {"id": "g2_q35", "text": "Mi trabajo afecta mi vida personal.", "text_en": "My job negatively affects my personal life.", "group": "work_life_balance"},
-    {"id": "g2_q36", "text": "Tengo tiempo para actividades personales.", "text_en": "I have time for personal activities.", "group": "work_life_balance"},
-    {"id": "g2_q37", "text": "Mi horario de trabajo es flexible.", "text_en": "My work schedule is flexible.", "group": "work_life_balance"},
-    {"id": "g2_q38", "text": "Recibo capacitación para mi trabajo.", "text_en": "I receive training for my job.", "group": "work_life_balance"},
-    {"id": "g2_q39", "text": "Tengo oportunidades de crecimiento.", "text_en": "I have opportunities for growth.", "group": "work_life_balance"},
-    {"id": "g2_q40", "text": "Siento que mi trabajo es estable.", "text_en": "I feel my job is stable.", "group": "work_life_balance"},
-    {"id": "g2_q41", "text": "Mi salario es adecuado.", "text_en": "My salary is adequate.", "group": "work_life_balance"},
-    {"id": "g2_q42", "text": "Recibo beneficios adicionales.", "text_en": "I receive additional benefits.", "group": "work_life_balance"},
-    {"id": "g2_q43", "text": "Mi trabajo es importante para la empresa.", "text_en": "My job is important to the company.", "group": "work_life_balance"},
-    {"id": "g2_q44", "text": "Me siento motivado(a) en mi trabajo.", "text_en": "I feel motivated at work.", "group": "work_life_balance"},
-    {"id": "g2_q45", "text": "Mi trabajo me permite desarrollar habilidades.", "text_en": "My job allows skill development.", "group": "work_life_balance"},
-    {"id": "g2_q46", "text": "Mi trabajo tiene un propósito claro.", "text_en": "My job has a clear purpose.", "group": "work_life_balance"}
+    {"id": "g2_q1", "text": "Mi trabajo requiere gran esfuerzo físico.", "text_en": "My job requires significant physical effort.", "type": "likert", "group": "work_conditions"},
+    {"id": "g2_q2", "text": "Me siento expuesto(a) a riesgos físicos en mi trabajo.", "text_en": "I feel exposed to physical risks at work.", "type": "likert", "group": "work_conditions"},
+    {"id": "g2_q3", "text": "Manejo herramientas que representan riesgo.", "text_en": "I handle tools that pose a risk.", "type": "likert", "group": "work_conditions"},
+    {"id": "g2_q4", "text": "Trabajo en un lugar con ruidos fuertes.", "text_en": "I work in a place with loud noises.", "type": "likert", "group": "work_conditions"},
+    {"id": "g2_q5", "text": "Trabajo en un lugar con temperaturas extremas.", "text_en": "I work in a place with extreme temperatures.", "type": "likert", "group": "work_conditions"},
+    {"id": "g2_q6", "text": "Estoy expuesto(a) a materiales peligrosos.", "text_en": "I am exposed to hazardous materials.", "type": "likert", "group": "work_conditions"},
+    {"id": "g2_q7", "text": "Mi trabajo requiere estar de pie mucho tiempo.", "text_en": "My job requires standing for long periods.", "type": "likert", "group": "work_conditions"},
+    {"id": "g2_q8", "text": "Realizo movimientos repetitivos en mi trabajo.", "text_en": "I perform repetitive movements at work.", "type": "likert", "group": "work_conditions"},
+    {"id": "g2_q9", "text": "Mi trabajo requiere posturas incómodas.", "text_en": "My job requires uncomfortable postures.", "type": "likert", "group": "work_conditions"},
+    {"id": "g2_q10", "text": "Tengo que mover objetos pesados.", "text_en": "I have to move heavy objects.", "type": "likert", "group": "work_conditions"},
+    {"id": "g2_q11", "text": "Puedo tomar pausas cuando las necesito.", "text_en": "I can take breaks when needed.", "type": "likert", "group": "workload_pace"},
+    {"id": "g2_q12", "text": "Puedo decidir la cantidad de trabajo que realizo.", "text_en": "I can decide the amount of work I do.", "type": "likert", "group": "workload_pace"},
+    {"id": "g2_q13", "text": "Tengo libertad para decidir cómo realizar mi trabajo.", "text_en": "I have freedom to decide how to do my job.", "type": "likert", "group": "workload_pace"},
+    {"id": "g2_q14", "text": "Mi trabajo requiere decisiones difíciles.", "text_en": "My job requires difficult decisions.", "type": "likert", "group": "workload_pace"},
+    {"id": "g2_q15", "text": "Tengo que atender varias tareas a la vez.", "text_en": "I handle multiple tasks at once.", "type": "likert", "group": "workload_pace"},
+    {"id": "g2_q16", "text": "Mi trabajo requiere alta concentración.", "text_en": "My job requires high concentration.", "type": "likert", "group": "workload_pace"},
+    {"id": "g2_q17", "text": "La cantidad de trabajo es excesiva.", "text_en": "The amount of work is excessive.", "type": "likert", "group": "workload_pace"},
+    {"id": "g2_q18", "text": "Trabajo horas extras con frecuencia.", "text_en": "I work overtime frequently.", "type": "likert", "group": "workload_pace"},
+    {"id": "g2_q19", "text": "Debo estar disponible fuera de mi horario.", "text_en": "I must be available outside working hours.", "type": "likert", "group": "workload_pace"},
+    {"id": "g2_q20", "text": "Mi ritmo de trabajo es muy acelerado.", "text_en": "My work pace is very fast.", "type": "likert", "group": "workload_pace"},
+    {"id": "g2_q21", "text": "Mi jefe me presiona para cumplir objetivos.", "text_en": "My boss pressures me to meet goals.", "type": "likert", "group": "control_decision"},
+    {"id": "g2_q22", "text": "Recibo órdenes contradictorias.", "text_en": "I receive contradictory orders.", "type": "likert", "group": "control_decision"},
+    {"id": "g2_q23", "text": "Mi jefe me da instrucciones claras.", "text_en": "My boss gives clear instructions.", "type": "likert", "group": "control_decision"},
+    {"id": "g2_q24", "text": "Mi jefe me apoya en problemas laborales.", "text_en": "My boss supports me with work problems.", "type": "likert", "group": "control_decision"},
+    {"id": "g2_q25", "text": "Mi jefe confía en mi capacidad.", "text_en": "My boss trusts my ability.", "type": "likert", "group": "control_decision"},
+    {"id": "g2_q26", "text": "Mi jefe me trata con respeto.", "text_en": "My boss treats me with respect.", "type": "likert", "group": "work_relationships"},
+    {"id": "g2_q27", "text": "Me siento valorado(a) por mis compañeros.", "text_en": "I feel valued by my colleagues.", "type": "likert", "group": "work_relationships"},
+    {"id": "g2_q28", "text": "Tengo buena comunicación con mis compañeros.", "text_en": "I have good communication with coworkers.", "type": "likert", "group": "work_relationships"},
+    {"id": "g2_q29", "text": "Hay un ambiente de colaboración.", "text_en": "There is a collaborative environment.", "type": "likert", "group": "work_relationships"},
+    {"id": "g2_q30", "text": "Recibo críticas negativas con frecuencia.", "text_en": "I receive negative criticism frequently.", "type": "likert", "group": "work_relationships"},
+    {"id": "g2_q31", "text": "Mis compañeros me excluyen.", "text_en": "My colleagues exclude me.", "type": "likert", "group": "work_relationships"},
+    {"id": "g2_q32", "text": "He sido víctima de burlas en el trabajo.", "text_en": "I have been a victim of teasing at work.", "type": "likert", "group": "work_relationships"},
+    {"id": "g2_q33", "text": "He sido testigo de discriminación.", "text_en": "I have witnessed discrimination.", "type": "likert", "group": "work_relationships"},
+    {"id": "g2_q34", "text": "Mi trabajo interfiere con mi familia.", "text_en": "My job interferes with family responsibilities.", "type": "likert", "group": "work_life_balance"},
+    {"id": "g2_q35", "text": "Mi trabajo afecta mi vida personal.", "text_en": "My job negatively affects my personal life.", "type": "likert", "group": "work_life_balance"},
+    {"id": "g2_q36", "text": "Tengo tiempo para actividades personales.", "text_en": "I have time for personal activities.", "type": "likert", "group": "work_life_balance"},
+    {"id": "g2_q37", "text": "Mi horario de trabajo es flexible.", "text_en": "My work schedule is flexible.", "type": "likert", "group": "work_life_balance"},
+    {"id": "g2_q38", "text": "Recibo capacitación para mi trabajo.", "text_en": "I receive training for my job.", "type": "likert", "group": "work_life_balance"},
+    {"id": "g2_q39", "text": "Tengo oportunidades de crecimiento.", "text_en": "I have opportunities for growth.", "type": "likert", "group": "work_life_balance"},
+    {"id": "g2_q40", "text": "Siento que mi trabajo es estable.", "text_en": "I feel my job is stable.", "type": "likert", "group": "work_life_balance"},
+    {"id": "g2_q41", "text": "Mi salario es adecuado.", "text_en": "My salary is adequate.", "type": "likert", "group": "work_life_balance"},
+    {"id": "g2_q42", "text": "Recibo beneficios adicionales.", "text_en": "I receive additional benefits.", "type": "likert", "group": "work_life_balance"},
+    {"id": "g2_q43", "text": "Mi trabajo es importante para la empresa.", "text_en": "My job is important to the company.", "type": "likert", "group": "work_life_balance"},
+    {"id": "g2_q44", "text": "Me siento motivado(a) en mi trabajo.", "text_en": "I feel motivated at work.", "type": "likert", "group": "work_life_balance"},
+    {"id": "g2_q45", "text": "Mi trabajo me permite desarrollar habilidades.", "text_en": "My job allows skill development.", "type": "likert", "group": "work_life_balance"},
+    {"id": "g2_q46", "text": "Mi trabajo tiene un propósito claro.", "text_en": "My job has a clear purpose.", "type": "likert", "group": "work_life_balance"}
 ]
 
 GUIDE3_QUESTIONS = [
-    {"id": "g3_q1", "text": "Me informan claramente mis responsabilidades.", "text_en": "I am clearly informed about my responsibilities."},
-    {"id": "g3_q2", "text": "Recibo instrucciones claras para mi trabajo.", "text_en": "I receive clear instructions for my job."},
-    {"id": "g3_q3", "text": "Mi jefe comunica lo que espera de mí.", "text_en": "My boss communicates expectations clearly."},
-    {"id": "g3_q4", "text": "Tengo los recursos necesarios para mi trabajo.", "text_en": "I have the necessary resources for my job."},
-    {"id": "g3_q5", "text": "Tengo acceso a herramientas necesarias.", "text_en": "I have access to necessary tools."},
-    {"id": "g3_q6", "text": "Recibo retroalimentación sobre mi desempeño.", "text_en": "I receive feedback on my performance."},
-    {"id": "g3_q7", "text": "Mi jefe reconoce mi trabajo bien hecho.", "text_en": "My boss acknowledges my good work."},
-    {"id": "g3_q8", "text": "Me siento valorado(a) por mis contribuciones.", "text_en": "I feel valued for my contributions."},
-    {"id": "g3_q9", "text": "Recibo reconocimiento por mis logros.", "text_en": "I receive recognition for my achievements."},
-    {"id": "g3_q10", "text": "Se promueve la igualdad de oportunidades.", "text_en": "Equal opportunities are promoted."},
-    {"id": "g3_q11", "text": "Siento que se me trata con justicia.", "text_en": "I feel treated fairly."},
-    {"id": "g3_q12", "text": "Mis opiniones son tomadas en cuenta.", "text_en": "My opinions are considered."},
-    {"id": "g3_q13", "text": "Puedo expresar mis ideas.", "text_en": "I can express my ideas."},
-    {"id": "g3_q14", "text": "Se fomenta la participación en decisiones.", "text_en": "Participation in decisions is encouraged."},
-    {"id": "g3_q15", "text": "Siento que pertenezco a un equipo.", "text_en": "I feel part of a team."},
-    {"id": "g3_q16", "text": "Hay un ambiente de respeto mutuo.", "text_en": "There is mutual respect."},
-    {"id": "g3_q17", "text": "Mis compañeros me tratan con cortesía.", "text_en": "My colleagues treat me with courtesy."},
-    {"id": "g3_q18", "text": "Se promueve la colaboración entre compañeros.", "text_en": "Collaboration is promoted."},
-    {"id": "g3_q19", "text": "Hay un buen ambiente laboral.", "text_en": "There is a good work environment."},
-    {"id": "g3_q20", "text": "Se fomenta la confianza entre empleados.", "text_en": "Trust among employees is fostered."},
-    {"id": "g3_q21", "text": "La empresa promueve un mejor clima laboral.", "text_en": "The company promotes a better work environment."},
-    {"id": "g3_q22", "text": "Recibo apoyo para balancear mi vida laboral.", "text_en": "I receive support to balance work and life."},
-    {"id": "g3_q23", "text": "La empresa ofrece beneficios para mi bienestar.", "text_en": "The company offers benefits for my well-being."},
-    {"id": "g3_q24", "text": "La empresa se preocupa por mi salud.", "text_en": "The company cares about my health."},
-    {"id": "g3_q25", "text": "Se promueve el respeto a la diversidad.", "text_en": "Respect for diversity is promoted."},
-    {"id": "g3_q26", "text": "La empresa valora mi trabajo.", "text_en": "The company values my work."}
+    {"id": "g3_q1", "text": "Me informan claramente mis responsabilidades.", "text_en": "I am clearly informed about my responsibilities.", "type": "likert"},
+    {"id": "g3_q2", "text": "Recibo instrucciones claras para mi trabajo.", "text_en": "I receive clear instructions for my job.", "type": "likert"},
+    {"id": "g3_q3", "text": "Mi jefe comunica lo que espera de mí.", "text_en": "My boss communicates expectations clearly.", "type": "likert"},
+    {"id": "g3_q4", "text": "Tengo los recursos necesarios para mi trabajo.", "text_en": "I have the necessary resources for my job.", "type": "likert"},
+    {"id": "g3_q5", "text": "Tengo acceso a herramientas necesarias.", "text_en": "I have access to necessary tools.", "type": "likert"},
+    {"id": "g3_q6", "text": "Recibo retroalimentación sobre mi desempeño.", "text_en": "I receive feedback on my performance.", "type": "likert"},
+    {"id": "g3_q7", "text": "Mi jefe reconoce mi trabajo bien hecho.", "text_en": "My boss acknowledges my good work.", "type": "likert"},
+    {"id": "g3_q8", "text": "Me siento valorado(a) por mis contribuciones.", "text_en": "I feel valued for my contributions.", "type": "likert"},
+    {"id": "g3_q9", "text": "Recibo reconocimiento por mis logros.", "text_en": "I receive recognition for my achievements.", "type": "likert"},
+    {"id": "g3_q10", "text": "Se promueve la igualdad de oportunidades.", "text_en": "Equal opportunities are promoted.", "type": "likert"},
+    {"id": "g3_q11", "text": "Siento que se me trata con justicia.", "text_en": "I feel treated fairly.", "type": "likert"},
+    {"id": "g3_q12", "text": "Mis opiniones son tomadas en cuenta.", "text_en": "My opinions are considered.", "type": "likert"},
+    {"id": "g3_q13", "text": "Puedo expresar mis ideas.", "text_en": "I can express my ideas.", "type": "likert"},
+    {"id": "g3_q14", "text": "Se fomenta la participación en decisiones.", "text_en": "Participation in decisions is encouraged.", "type": "likert"},
+    {"id": "g3_q15", "text": "Siento que pertenezco a un equipo.", "text_en": "I feel part of a team.", "type": "likert"},
+    {"id": "g3_q16", "text": "Hay un ambiente de respeto mutuo.", "text_en": "There is mutual respect.", "type": "likert"},
+    {"id": "g3_q17", "text": "Mis compañeros me tratan con cortesía.", "text_en": "My colleagues treat me with courtesy.", "type": "likert"},
+    {"id": "g3_q18", "text": "Se promueve la colaboración entre compañeros.", "text_en": "Collaboration is promoted.", "type": "likert"},
+    {"id": "g3_q19", "text": "Hay un buen ambiente laboral.", "text_en": "There is a good work environment.", "type": "likert"},
+    {"id": "g3_q20", "text": "Se fomenta la confianza entre empleados.", "text_en": "Trust among employees is fostered.", "type": "likert"},
+    {"id": "g3_q21", "text": "La empresa promueve un mejor clima laboral.", "text_en": "The company promotes a better work environment.", "type": "likert"},
+    {"id": "g3_q22", "text": "Recibo apoyo para balancear mi vida laboral.", "text_en": "I receive support to balance work and life.", "type": "likert"},
+    {"id": "g3_q23", "text": "La empresa ofrece beneficios para mi bienestar.", "text_en": "The company offers benefits for my well-being.", "type": "likert"},
+    {"id": "g3_q24", "text": "La empresa se preocupa por mi salud.", "text_en": "The company cares about my health.", "type": "likert"},
+    {"id": "g3_q25", "text": "Se promueve el respeto a la diversidad.", "text_en": "Respect for diversity is promoted.", "type": "likert"},
+    {"id": "g3_q26", "text": "La empresa valora mi trabajo.", "text_en": "The company values my work.", "type": "likert"}
 ]
 
 # Cache question data
@@ -548,14 +548,19 @@ def render_sidebar(lang_code: str) -> None:
                             st.session_state.responses[q["id"]] = new_responses[idx]
                     update_trauma_status(st.session_state.responses, new_t)
                     logger.debug("Language changed successfully.")
+                    try:
+                        st.rerun()
+                    except Exception as e:
+                        logger.error(f"Error during language change rerun: {str(e)}")
+                        st.error(t["unexpected_error"].format(error=str(e)) if DEBUG_MODE else t["unexpected_error"].format(error="Language change failed"))
                 except Exception as e:
                     logger.error(f"Error during language change: {str(e)}")
                     st.error(t["unexpected_error"].format(error=str(e)) if DEBUG_MODE else t["unexpected_error"].format(error="Language change failed"))
 
-            st.selectbox("Language / Idioma", ["Español", "English"], key="language_selector", on_change=on_language_change)
+            st.selectbox("Language / Idioma", ["Español", "English"], key="language_selector", on_change=on_language_change, label="Select Language")
             
             st.markdown(f'<h3 class="subheader">{t["download_log"]}</h3>', unsafe_allow_html=True)
-            password_download = st.text_input(t["password_prompt"], type="password", key="download_password")
+            password_download = st.text_input(t["password_prompt"], type="password", key="download_password", label="Download Password")
             if st.button(t["download_log"], key="download_button"):
                 if action_lock():
                     hashed_input = hash_password(password_download, SALT)
@@ -576,7 +581,7 @@ def render_sidebar(lang_code: str) -> None:
                         st.error(t["incorrect_password"])
 
             st.markdown(f'<h3 class="subheader">{t["refresh_log"]}</h3>', unsafe_allow_html=True)
-            password_refresh = st.text_input(t["password_prompt"], type="password", key="refresh_password")
+            password_refresh = st.text_input(t["password_prompt"], type="password", key="refresh_password", label="Refresh Password")
             if st.button(t["refresh_log"], key="refresh_button"):
                 if action_lock():
                     hashed_input = hash_password(password_refresh, SALT)
@@ -671,11 +676,18 @@ def validate_responses(responses: Dict, guide_questions: List, guide_id: str, is
             if q["type"] != "text_group":
                 key = q["id"]
                 value = responses.get(key)
-                valid_responses = (
-                    get_valid_responses(lang_code) if q.get("type") == "likert" else
-                    [t["yes"], t["no"]] if q["type"] == "yes_no" else
-                    q["options" if lang_code == "es" else "options_en"]
-                )
+                try:
+                    if q["type"] == "yes_no":
+                        valid_responses = [t["yes"], t["no"]]
+                    elif q["type"] == "likert":
+                        valid_responses = get_valid_responses(lang_code)
+                    else:  # select
+                        valid_responses = q["options" if lang_code == "es" else "options_en"]
+                except KeyError as e:
+                    logger.error(f"Missing key {str(e)} for question {key}")
+                    errors[key] = t["unexpected_error"].format(error=f"Invalid question configuration for {key}")
+                    continue
+                
                 if value is None or (isinstance(value, str) and not value.strip()):
                     errors[key] = t["missing_field"].format(field=q["text" if lang_code == "es" else "text_en"])
                     logger.debug(f"Validation failed for {key}: Value='{value}'")
@@ -720,7 +732,7 @@ def render_question(q: Dict, lang_code: str, t: Dict, guide_id: str) -> None:
                     st.markdown(f'<p class="error-message">{st.session_state.validation_errors[guide_id][subfield["id"]]}</p>', unsafe_allow_html=True)
         elif q["type"] == "number":
             response = st.number_input(
-                "",
+                question_text,
                 min_value=0,
                 max_value=100,
                 step=1,
@@ -736,7 +748,7 @@ def render_question(q: Dict, lang_code: str, t: Dict, guide_id: str) -> None:
         elif q["type"] == "select":
             options = q["options" if lang_code == "es" else "options_en"]
             response = st.selectbox(
-                "",
+                question_text,
                 options,
                 key=q["id"],
                 label_visibility="collapsed",
@@ -749,7 +761,7 @@ def render_question(q: Dict, lang_code: str, t: Dict, guide_id: str) -> None:
                 st.markdown(f'<p class="error-message">{st.session_state.validation_errors[guide_id][q["id"]]}</p>', unsafe_allow_html=True)
         elif q["type"] == "yes_no":
             response = st.radio(
-                "",
+                question_text,
                 [t["yes"], t["no"]],
                 key=q["id"],
                 label_visibility="collapsed",
@@ -763,7 +775,7 @@ def render_question(q: Dict, lang_code: str, t: Dict, guide_id: str) -> None:
                 st.markdown(f'<p class="error-message">{st.session_state.validation_errors[guide_id][q["id"]]}</p>', unsafe_allow_html=True)
         elif q["type"] == "likert":
             response = st.radio(
-                "",
+                question_text,
                 get_valid_responses(lang_code),
                 key=q["id"],
                 label_visibility="collapsed",
@@ -836,9 +848,6 @@ def main():
             st.markdown(f'<h2 class="header">{t["guide2"]}</h2>', unsafe_allow_html=True)
             st.markdown(f'<p class="tooltip">{t["tooltip_guide2"]}</p>', unsafe_allow_html=True)
 
-            for q in GUIDE2_QUESTIONS:
-                q["type"] = "likert"
-
             guide2_groups = [
                 ("work_conditions", t["work_conditions"], [q for q in GUIDE2_QUESTIONS if q["group"] == "work_conditions"]),
                 ("workload_pace", t["workload_pace"], [q for q in GUIDE2_QUESTIONS if q["group"] == "workload_pace"]),
@@ -875,9 +884,6 @@ def main():
         elif st.session_state.guide2_complete and st.session_state.has_trauma and not st.session_state.guide3_complete:
             st.markdown(f'<h2 class="header">{t["guide3"]}</h2>', unsafe_allow_html=True)
             st.markdown(f'<p class="tooltip">{t["tooltip_guide3"]}</p>', unsafe_allow_html=True)
-
-            for q in GUIDE3_QUESTIONS:
-                q["type"] = "likert"
 
             st.markdown('<div class="card">', unsafe_allow_html=True)
             for q in GUIDE3_QUESTIONS:
