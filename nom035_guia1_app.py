@@ -15,7 +15,7 @@ from datetime import datetime
 st.set_page_config(page_title="🧠 NOM-035 Guia I", layout="centered")
 
 # Clave de acceso predeterminada
-ACCESS_KEY = "NOM035_G1"
+ACCESS_KEY = "NOM035_ACCESS_2025"
 
 if "responses" not in st.session_state:
     st.session_state.responses = []
@@ -281,7 +281,6 @@ if section == "📥 Descargar Reporte":
                 analysis, df = generate_statistical_analysis(df)
                 
                 # Generar visualizaciones
-                visualizations = generateස
                 visualizations = generate_visualizations(df, temp_dir)
                 
                 # Generar recomendaciones
