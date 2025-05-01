@@ -16,7 +16,7 @@ if "responses" not in st.session_state:
     st.session_state.responses = []
 
 # Sidebar
-st.sidebar.image("https://img.icons8.com/ios-filled/100/mental-health.png", width=60)
+st.sidebar.image("assets/FOBO2.png", width=100)
 st.sidebar.title("Evaluación NOM-035")
 section = st.sidebar.radio("Ir a sección:", ["📋 Evaluación", "📥 Descargar Reporte"])
 
