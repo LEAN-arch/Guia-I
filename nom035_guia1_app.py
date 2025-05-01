@@ -328,10 +328,13 @@ def validate_responses(responses, guide_questions, is_guide1=False):
             if not (0 <= responses["g1_q4"] <= responses["g1_q2"]):
                 errors.append(t["invalid_years_worked"])
     
-    # Check all required fields
-    required_keys = [q["id"] for q in guide_questions if q["type"] != "text_group"]
+    # Collect required keys (handle both Guía I and Guía II/III)
+    required_keys = [q["id"] for q in guide_questions]
     if is_guide1:
-        required_keys += [subfield["id"] for q in guide_questions if q["type"] == "text_group" for subfield in q["subfields"]]
+        # Add subfields for text_group questions (only in Guía I)
+        required_keys += [subfield["id"] for q in guide_questions if q.get("type") == "text_group" for subfield in q["subfields"]]
+    
+    # Check all required fields
     for key in required_keys:
         if key not in responses or responses[key] is None or (isinstance(responses[key], str) and not responses[key].strip()):
             errors.append(t["validation_error"])
