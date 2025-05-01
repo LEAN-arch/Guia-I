@@ -9,7 +9,7 @@ from email.message import EmailMessage
 
 st.set_page_config(page_title="🧠 NOM-035 Guía I - Evaluación Psicosocial", layout="centered")
 
-EMAIL_DESTINO = "contacto@lean2institute.org"
+EMAIL_DESTINO = "jbautistamsc@gmail.com"
 
 if "responses" not in st.session_state:
     st.session_state.responses = []
@@ -60,7 +60,7 @@ def enviar_correo(destinatario, data):
     try:
         msg = EmailMessage()
         msg["Subject"] = "Nueva respuesta - NOM-035 Guía I"
-        msg["From"] = "noreply@lean2institute.org"
+        msg["From"] = "jbautistamsc@gmail.com"
         msg["To"] = destinatario
         body = "\n".join(f"{k}: {v}" for k, v in data.items())
         msg.set_content(f"Se recibió una nueva respuesta de la evaluación psicosocial.\n\n{body}")
