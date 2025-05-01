@@ -1073,5 +1073,7 @@ elif section == "🔄 Reiniciar Datos":
                                          placeholder="Contraseña de reinicio", label_visibility="visible")
             reset_button = st.form_submit_button("🔄 Reiniciar", help="Reiniciar todos los datos")
             
+
+            
             if reset_button:
                 reset_data(reset_password, temp_dir)
