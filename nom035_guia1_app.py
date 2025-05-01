@@ -68,7 +68,8 @@ LANGUAGES = {
         "optional_field": "(Opcional)",
         "completed": "¡Guía completada exitosamente!",
         "file_error": "Error al acceder al archivo de registro. Contacte al soporte.",
-        "sidebar_error": "Error al cargar la barra lateral. Intente de nuevo o contacte al soporte."
+        "sidebar_error": "Error al cargar la barra lateral. Intente de nuevo o contacte al soporte.",
+        "version_error": "Streamlit version incompatibility. Please ensure Streamlit version >= 1.12.0 is installed."
     },
     "en": {
         "title": "NOM-035-STPS-2018 Survey",
@@ -111,7 +112,8 @@ LANGUAGES = {
         "optional_field": "(Optional)",
         "completed": "Guide completed successfully!",
         "file_error": "Error accessing the log file. Contact support.",
-        "sidebar_error": "Error loading the sidebar. Try again or contact support."
+        "sidebar_error": "Error loading the sidebar. Try again or contact support.",
+        "version_error": "Streamlit version incompatibility. Please ensure Streamlit version >= 1.12.0 is installed."
     }
 }
 
@@ -854,7 +856,8 @@ try:
                 st.session_state.validation_errors = validate_responses(st.session_state.responses, GUIDE1_QUESTIONS, is_guide1=True)
                 if st.session_state.validation_errors:
                     st.error(t["validation_error"])
-                    st.experimental_rerun()
+                    logger.debug("Validation errors detected, triggering rerun")
+                    st.rerun()
                 else:
                     st.session_state.validation_errors = {}
                     st.session_state.guide1_complete = True
@@ -864,7 +867,8 @@ try:
                     else:
                         save_responses_to_log()
                     st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
-                    st.experimental_rerun()
+                    logger.debug("Guide I completed, triggering rerun")
+                    st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -920,12 +924,14 @@ try:
                 st.session_state.validation_errors = validate_responses(st.session_state.responses, GUIDE2_QUESTIONS)
                 if st.session_state.validation_errors:
                     st.error(t["validation_error"])
-                    st.experimental_rerun()
+                    logger.debug("Guide II validation errors, triggering rerun")
+                    st.rerun()
                 else:
                     st.session_state.validation_errors = {}
                     st.session_state.guide2_complete = True
                     st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
-                    st.experimental_rerun()
+                    logger.debug("Guide II completed, triggering rerun")
+                    st.rerun()
 
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -970,17 +976,22 @@ try:
                 st.session_state.validation_errors = validate_responses(st.session_state.responses, GUIDE3_QUESTIONS)
                 if st.session_state.validation_errors:
                     st.error(t["validation_error"])
-                    st.experimental_rerun()
+                    logger.debug("Guide III validation errors, triggering rerun")
+                    st.rerun()
                 else:
                     st.session_state.validation_errors = {}
                     st.session_state.guide3_complete = True
                     save_responses_to_log()
                     st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
-                    st.experimental_rerun()
+                    logger.debug("Guide III completed, triggering rerun")
+                    st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
 except Exception as e:
     logger.error(f"Main app rendering failed: {str(e)}")
-    st.error("Error loading the survey. Try again or contact support.")
+    if "has no attribute 'experimental_rerun'" in str(e) or "has no attribute 'rerun'" in str(e):
+        st.error(t.get("version_error", "Streamlit version incompatibility. Please ensure Streamlit version >= 1.12.0 is installed."))
+    else:
+        st.error("Error loading the survey. Try again or contact support.")
     if DEBUG_MODE:
         st.write(f"Debug: {str(e)}")
