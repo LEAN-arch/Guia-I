@@ -787,13 +787,18 @@ if section == "📋 Evaluación":
                                                        label_visibility="collapsed",
                                                        caption=f"Seleccione una opción para {q.lower()}")
                 
+                # Single submit button for form submission
                 col1, col2 = st.columns(2)
                 with col1:
-                    submit_button = st.form_submit_button("✅ Enviar Guía I", help="Enviar respuestas de Guía I", type="primary")
+                    submitted = st.form_submit_button("✅ Enviar Guía I", help="Enviar respuestas de Guía I", type="primary")
                 with col2:
-                    clear_button = st.form_submit_button("🗑️ Limpiar Formulario", help="Borrar todas las respuestas del formulario")
+                    # Clear button outside form_submit_button to avoid multiple submit buttons
+                    if st.button("🗑️ Limpiar Formulario", help="Borrar todas las respuestas del formulario"):
+                        st.session_state.guia_i_responses = {}
+                        st.success("🗑️ Formulario limpiado.")
+                        st.rerun()
                 
-                if submit_button:
+                if submitted:
                     try:
                         is_valid, errors = validate_form(respuestas, guia_i_questions)
                         if is_valid:
@@ -821,11 +826,6 @@ if section == "📋 Evaluación":
                         st.session_state.form_error = f"Error al procesar la evaluación: {str(e)}"
                         st.error(st.session_state.form_error)
                 
-                if clear_button:
-                    st.session_state.guia_i_responses = {}
-                    st.success("🗑️ Formulario limpiado.")
-                    st.rerun()
-                
                 if st.session_state.form_error:
                     if st.form_submit_button("🔄 Reintentar", help="Reintentar el envío"):
                         st.session_state.form_error = None
@@ -849,13 +849,18 @@ if section == "📋 Evaluación":
                                                    label_visibility="collapsed",
                                                    caption=f"Seleccione una opción para {q.lower()}")
                 
+                # Single submit button for form submission
                 col1, col2 = st.columns(2)
                 with col1:
-                    submit_button = st.form_submit_button("✅ Enviar Guía II", help="Enviar respuestas de Guía II", type="primary")
+                    submitted = st.form_submit_button("✅ Enviar Guía II", help="Enviar respuestas de Guía II", type="primary")
                 with col2:
-                    clear_button = st.form_submit_button("🗑️ Limpiar Formulario", help="Borrar todas las respuestas del formulario")
+                    # Clear button outside form_submit_button to avoid multiple submit buttons
+                    if st.button("🗑️ Limpiar Formulario", help="Borrar todas las respuestas del formulario"):
+                        st.session_state.guia_ii_responses = st.session_state.guia_i_responses.copy()
+                        st.success("🗑️ Formulario limpiado.")
+                        st.rerun()
                 
-                if submit_button:
+                if submitted:
                     try:
                         is_valid, errors = validate_form(respuestas, guia_i_questions + guia_ii_questions)
                         if is_valid:
@@ -876,11 +881,6 @@ if section == "📋 Evaluación":
                         logger.error(f"Error processing Guía II submission: {str(e)}")
                         st.session_state.form_error = f"Error al procesar la evaluación: {str(e)}"
                         st.error(st.session_state.form_error)
-                
-                if clear_button:
-                    st.session_state.guia_ii_responses = st.session_state.guia_i_responses.copy()
-                    st.success("🗑️ Formulario limpiado.")
-                    st.rerun()
                 
                 if st.session_state.form_error:
                     if st.form_submit_button("🔄 Reintentar", help="Reintentar el envío"):
@@ -1072,8 +1072,6 @@ elif section == "🔄 Reiniciar Datos":
             reset_password = st.text_input("🔑 Contraseña para reiniciar:", type="password", help="Ingrese la contraseña para reiniciar los datos",
                                          placeholder="Contraseña de reinicio", label_visibility="visible")
             reset_button = st.form_submit_button("🔄 Reiniciar", help="Reiniciar todos los datos")
-            
-
             
             if reset_button:
                 reset_data(reset_password, temp_dir)
