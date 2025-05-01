@@ -1288,16 +1288,14 @@ elif section == "📥 Descargar Reporte":
                                 st.image(path, use_column_width=True)
                             else:
                                 st.write(path)
-                                
+                    
                     except Exception as e:
-                         logger.error(f"Error generating report: {str(e)}")
-                         st.error(f"❌ Error al generar el reporte: {str(e)}")
-                            
-            
+                        logger.error(f"Error generating report: {str(e)}")
+                        st.error(f"❌ Error al generar el reporte: {str(e)}")
+        
         elif access_key:
             st.error("🔐 Clave de acceso incorrecta.")
     
-    # Reiniciar Datos
     elif section == "🔄 Reiniciar Datos":
         st.title("🔄 Reiniciar Datos")
         st.warning("⚠️ Esta acción eliminará todas las respuestas almacenadas.")
