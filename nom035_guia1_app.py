@@ -12,7 +12,7 @@ from typing import Dict, List, Tuple
 # Configure logging for debugging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-DEBUG_MODE = True  # Enabled for debugging sidebar issue
+DEBUG_MODE = True  # Enabled for debugging
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -436,8 +436,19 @@ def hash_password(password: str, salt: str) -> str:
         logger.error(f"Error in hash_password: {str(e)}")
         return ""
 
-
-CORRECT_PASSWORD_HASH = hash_password(PASSWORD, SALT)
+def action_lock() -> bool:
+    """Prevent rapid button clicks with a 1-second debounce."""
+    try:
+        current_time = time.time()
+        if current_time - st.session_state.last_action_time < 1:
+            st.warning(t["please_wait"])
+            return False
+        st.session_state.last_action_time = current_time
+        logger.debug("action_lock: Allowed action")
+        return True
+    except Exception as e:
+        logger.error(f"Error in action_lock: {str(e)}")
+        return False
 
 def initialize_log():
     """Initialize log file with headers if it doesn't exist."""
@@ -455,7 +466,6 @@ def initialize_log():
         logger.error(f"Error initializing log file: {str(e)}")
         raise
 
-
 def save_responses_to_log() -> Tuple[pd.DataFrame, str]:
     """Save responses to log file with timestamp."""
     try:
@@ -472,7 +482,6 @@ def save_responses_to_log() -> Tuple[pd.DataFrame, str]:
         logger.error(f"Error saving responses to log: {str(e)}")
         raise
 
-
 def refresh_log() -> bool:
     """Refresh log file by recreating it."""
     try:
@@ -482,6 +491,7 @@ def refresh_log() -> bool:
         logger.error(f"Error refreshing log: {str(e)}")
         raise
 
+CORRECT_PASSWORD_HASH = hash_password(PASSWORD, SALT)
 
 # Session State Initialization
 if "responses" not in st.session_state:
@@ -609,20 +619,6 @@ except Exception as e:
     if DEBUG_MODE:
         st.write(f"Debug: {str(e)}")
 
-def action_lock() -> bool:
-    """Prevent rapid button clicks with a 1-second debounce."""
-    try:
-        current_time = time.time()
-        if current_time - st.session_state.last_action_time < 1:
-            st.warning(t["please_wait"])
-            return False
-        st.session_state.last_action_time = current_time
-        return True
-    except Exception as e:
-        logger.error(f"Error in action_lock: {str(e)}")
-        return False
-
-
 def calculate_progress() -> float:
     """Calculate survey completion progress."""
     try:
@@ -646,7 +642,6 @@ def calculate_progress() -> float:
     except Exception as e:
         logger.error(f"Error in calculate_progress: {str(e)}")
         return 0
-
 
 def validate_responses(responses: Dict, guide_questions: List, is_guide1: bool = False) -> Dict[str, str]:
     """Validate survey responses and return field-specific errors."""
@@ -681,7 +676,7 @@ def validate_responses(responses: Dict, guide_questions: List, is_guide1: bool =
                     logger.debug(f"Validation failed for {key}: Value='{responses.get(key)}'")
             elif not is_guide1 and responses[key] not in VALID_RESPONSES_GUIDE2_3:
                 question_text = next((q["text" if lang_code == "es" else "text_en"] for q in guide_questions if q["id"] == key), key)
-                errors[key] = t["missing_field"].format.IOError(field=question_text)
+                errors[key] = t["missing_field"].format(field=question_text)
                 if DEBUG_MODE:
                     logger.debug(f"Validation failed for {key}: Invalid response='{responses[key]}'")
 
@@ -689,7 +684,6 @@ def validate_responses(responses: Dict, guide_questions: List, is_guide1: bool =
     except Exception as e:
         logger.error(f"Error in validate_responses: {str(e)}")
         return {}
-
 
 # Main App
 try:
