@@ -15,6 +15,17 @@ import time
 import logging
 from dotenv import load_dotenv
 
+# Configure logging before any logging calls
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("nom035_app.log")
+    ]
+)
+logger = logging.getLogger(__name__)
+
 # Load environment variables from .env file for secure password management
 load_dotenv()
 ACCESS_KEY = os.getenv("NOM035_ACCESS_KEY", "NOM035_ACCESS_2025")
@@ -27,17 +38,6 @@ if not ACCESS_KEY or len(ACCESS_KEY) < 8:
 if not RESET_PASSWORD or len(RESET_PASSWORD) < 8:
     logger.warning("NOM035_RESET_PASSWORD is missing or too short. Using fallback.")
     RESET_PASSWORD = "RESET_NOM035_2025"
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler("nom035_app.log")
-    ]
-)
-logger = logging.getLogger(__name__)
 
 # Page configuration
 st.set_page_config(page_title="🧠 NOM-035 Guía I y II", layout="centered")
@@ -769,7 +769,7 @@ if section == "📋 Evaluación":
                         for idx, (q, tipo, params) in enumerate(section_data["items"]):
                             st.markdown(f"**{q}**")
                             if tipo == "text":
-                                respuestas[q] = st.text_input("", key=f"gi_q{idx}_{q}", value=responses.get(q, ""),
+                                respuestas[q] = st.text_input("", key=f"gi_q{idx}_{q}", value=respuestas.get(q, ""),
                                                             max_chars=params.get("max_length"), help=f"Ingrese {q.lower()}",
                                                             placeholder=f"Ingrese {q.lower()}", label_visibility="collapsed")
                             elif tipo == "number":
