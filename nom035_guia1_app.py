@@ -15,7 +15,7 @@ from datetime import datetime
 st.set_page_config(page_title="🧠 NOM-035 Guia I", layout="centered")
 
 # Clave de acceso predeterminada
-ACCESS_KEY = "NOM035_ACCESS_2025"
+ACCESS_KEY = "NOM035G1"
 
 if "responses" not in st.session_state:
     st.session_state.responses = []
