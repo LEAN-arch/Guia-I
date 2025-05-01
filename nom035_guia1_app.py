@@ -9,12 +9,13 @@ import os
 import tempfile
 import numpy as np
 from scipy import stats
+from datetime import datetime
 
 # Configuracion de pagina
 st.set_page_config(page_title="🧠 NOM-035 Guia I", layout="centered")
 
 # Clave de acceso predeterminada
-ACCESS_KEY = "NOM035_ACCESS_2025"
+ACCESS_KEY = "NOM035G1"
 
 if "responses" not in st.session_state:
     st.session_state.responses = []
@@ -87,6 +88,38 @@ questions = [
     }
 ]
 
+# Funcion para calcular puntaje de riesgo psicosocial
+def calculate_risk_score(row, symptom_cols):
+    score = sum(1 for col in symptom_cols if row[col] == 'Si')
+    if score >= 10:
+        return 'Alto'
+    elif score >= 5:
+        return 'Medio'
+    else:
+        return 'Bajo'
+
+# Funcion para generar recomendaciones basadas en analisis
+def generate_recommendations(analysis, risk_dist):
+    recommendations = []
+    high_risk = risk_dist.get('Alto', 0)
+    if high_risk > 0:
+        recommendations.append(f"{high_risk} empleados en riesgo alto. Implementar evaluaciones psicologicas inmediatas y programas de apoyo.")
+    
+    # Identificar departamentos de alto riesgo
+    dept_risk = analysis.get('Riesgo por Departamento', {})
+    high_risk_depts = [dept for dept, scores in dept_risk.items() if scores.get('Alto', 0) > 0]
+    if high_risk_depts:
+        recommendations.append(f"Departamentos con riesgo alto: {', '.join(high_risk_depts)}. Considerar intervenciones especificas.")
+    
+    # Identificar sintomas prevalentes
+    symptom_counts = analysis.get('Conteo de Sintomas', {})
+    top_symptoms = sorted(symptom_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+    if top_symptoms:
+        symptoms = [s[0] for s in top_symptoms]
+        recommendations.append(f"Sintomas mas comunes: {', '.join(symptoms)}. Enfocar programas de capacitacion en manejo de estres y trauma.")
+    
+    return recommendations if recommendations else ["No se identificaron riesgos significativos. Mantener monitoreo regular."]
+
 # Funcion para generar analisis estadistico
 def generate_statistical_analysis(df):
     analysis = {}
@@ -105,7 +138,7 @@ def generate_statistical_analysis(df):
         freq_tables[col] = freq
     analysis['Frecuencias Categoricas'] = freq_tables
     
-    # Correlacion entre variables numericas (si hay mas de una)
+    # Correlacion entre variables numericas
     if len(numeric_cols) > 1:
         correlation = df[numeric_cols].corr().round(2).to_dict()
         analysis['Correlacion'] = correlation
@@ -116,43 +149,84 @@ def generate_statistical_analysis(df):
     symptom_counts = symptom_data.apply(lambda x: (x == 'Si').sum())
     analysis['Conteo de Sintomas'] = symptom_counts.to_dict()
     
-    return analysis
+    # Puntaje de riesgo psicosocial
+    df['Nivel de Riesgo'] = df.apply(lambda row: calculate_risk_score(row, symptom_cols), axis=1)
+    risk_dist = df['Nivel de Riesgo'].value_counts().to_dict()
+    analysis['Distribucion de Riesgo'] = risk_dist
+    
+    # Riesgo por departamento
+    if '¿En que departamento labora?' in df.columns:
+        dept_risk = df.groupby('¿En que departamento labora?')['Nivel de Riesgo'].value_counts().unstack(fill_value=0).to_dict()
+        analysis['Riesgo por Departamento'] = dept_risk
+    
+    # Riesgo por genero
+    if '¿Cual es tu genero?' in df.columns:
+        gender_risk = df.groupby('¿Cual es tu genero?')['Nivel de Riesgo'].value_counts().unstack(fill_value=0).to_dict()
+        analysis['Riesgo por Genero'] = gender_risk
+    
+    return analysis, df
 
-# Funcion para generar visualizaciones y guardarlas como imagenes
+# Funcion para generar visualizaciones
 def generate_visualizations(df, temp_dir):
     visualizations = []
+    sns.set_style("whitegrid")
+    palette = sns.color_palette("Blues", n_colors=5)
     
-    # Histograma para variables numericas
-    numeric_cols = df.select_dtypes(include=[np.number]).columns
-    for col in numeric_cols:
-        plt.figure(figsize=(6, 4))
-        sns.histplot(df[col], kde=True)
-        plt.title(f'Distribucion de {col}')
-        plt.xlabel(col)
-        plt.ylabel('Frecuencia')
-        hist_path = os.path.join(temp_dir, f'hist_{col}.png')
-        plt.savefig(hist_path, bbox_inches='tight')
-        plt.close()
-        visualizations.append(('Histograma', col, hist_path))
+    # Distribucion de riesgo
+    plt.figure(figsize=(6, 4))
+    risk_counts = df['Nivel de Riesgo'].value_counts()
+    plt.pie(risk_counts, labels=risk_counts.index, autopct='%1.1f%%', colors=palette)
+    plt.title('Distribucion de Niveles de Riesgo Psicosocial')
+    risk_path = os.path.join(temp_dir, 'risk_distribution.png')
+    plt.savefig(risk_path, bbox_inches='tight')
+    plt.close()
+    visualizations.append(('Pie', 'Distribucion de Riesgo', risk_path))
     
-    # Graficos de barras para variables categoricas
-    categorical_cols = df.select_dtypes(include=['object']).columns
-    for col in categorical_cols:
-        plt.figure(figsize=(6, 4))
-        sns.countplot(data=df, x=col)
-        plt.title(f'Frecuencia de {col}')
-        plt.xlabel(col)
+    # Prevalencia de sintomas por categoria
+    symptom_cols = [q["items"][0][0] for q in questions[1:]]
+    symptom_counts = df[symptom_cols].apply(lambda x: (x == 'Si').sum())
+    plt.figure(figsize=(8, 5))
+    symptom_counts.plot(kind='bar', color=palette[2])
+    plt.title('Prevalencia de Sintomas (Respuestas "Si")')
+    plt.xlabel('Sintomas')
+    plt.ylabel('Numero de Empleados')
+    plt.xticks(rotation=45, ha='right')
+    symptom_path = os.path.join(temp_dir, 'symptom_prevalence.png')
+    plt.savefig(symptom_path, bbox_inches='tight')
+    plt.close()
+    visualizations.append(('Bar', 'Prevalencia de Sintomas', symptom_path))
+    
+    # Riesgo por departamento
+    if '¿En que departamento labora?' in df.columns:
+        plt.figure(figsize=(8, 5))
+        sns.countplot(data=df, x='¿En que departamento labora?', hue='Nivel de Riesgo', palette=palette)
+        plt.title('Nivel de Riesgo por Departamento')
+        plt.xlabel('Departamento')
         plt.ylabel('Conteo')
-        plt.xticks(rotation=45)
-        bar_path = os.path.join(temp_dir, f'bar_{col}.png')
-        plt.savefig(bar_path, bbox_inches='tight')
+        plt.xticks(rotation=45, ha='right')
+        plt.legend(title='Nivel de Riesgo')
+        dept_path = os.path.join(temp_dir, 'risk_by_department.png')
+        plt.savefig(dept_path, bbox_inches='tight')
         plt.close()
-        visualizations.append(('Barra', col, bar_path))
+        visualizations.append(('Bar', 'Riesgo por Departamento', dept_path))
     
-    # Heatmap de correlacion (si aplica)
+    # Distribucion de edad
+    if '¿Que edad tienes? (ej. 21)' in df.columns:
+        plt.figure(figsize=(6, 4))
+        sns.histplot(df['¿Que edad tienes? (ej. 21)'], kde=True, color=palette[3])
+        plt.title('Distribucion de Edad')
+        plt.xlabel('Edad')
+        plt.ylabel('Frecuencia')
+        age_path = os.path.join(temp_dir, 'age_distribution.png')
+        plt.savefig(age_path, bbox_inches='tight')
+        plt.close()
+        visualizations.append(('Histograma', 'Distribucion de Edad', age_path))
+    
+    # Heatmap de correlacion
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
     if len(numeric_cols) > 1:
         plt.figure(figsize=(6, 4))
-        sns.heatmap(df[numeric_cols].corr(), annot=True, cmap='coolwarm')
+        sns.heatmap(df[numeric_cols].corr(), annot=True, cmap='Blues', vmin=-1, vmax=1)
         plt.title('Mapa de Calor de Correlaciones')
         corr_path = os.path.join(temp_dir, 'correlation_heatmap.png')
         plt.savefig(corr_path, bbox_inches='tight')
@@ -204,17 +278,29 @@ if section == "📥 Descargar Reporte":
             # Crear directorio temporal para visualizaciones
             with tempfile.TemporaryDirectory() as temp_dir:
                 # Generar analisis estadistico
-                analysis = generate_statistical_analysis(df)
+                analysis, df = generate_statistical_analysis(df)
                 
                 # Generar visualizaciones
+                visualizations = generateස
                 visualizations = generate_visualizations(df, temp_dir)
+                
+                # Generar recomendaciones
+                recommendations = generate_recommendations(analysis, analysis.get('Distribucion de Riesgo', {}))
                 
                 # Exportar a Excel
                 wb = Workbook()
                 
+                # Hoja de resumen
+                ws_summary = wb.active
+                ws_summary.title = "Resumen Ejecutivo"
+                ws_summary.cell(1, 1).value = "Reporte NOM-035 Guia I - Resumen Ejecutivo"
+                ws_summary.cell(2, 1).value = f"Fecha: {datetime.now().strftime('%Y-%m-%d')}"
+                ws_summary.cell(4, 1).value = "Hallazgos Clave:"
+                for i, rec in enumerate(recommendations, start=5):
+                    ws_summary.cell(i, 1).value = f"- {rec}"
+                
                 # Hoja de datos crudos
-                ws_data = wb.active
-                ws_data.title = "Datos Crudos"
+                ws_data = wb.create_sheet("Datos Crudos")
                 ws_data.append(df.columns.tolist())
                 for row in df.itertuples(index=False):
                     ws_data.append([str(cell) for cell in row])
@@ -222,6 +308,16 @@ if section == "📥 Descargar Reporte":
                 # Hoja de analisis estadistico
                 ws_stats = wb.create_sheet("Analisis Estadistico")
                 row = 1
+                
+                # Distribucion de riesgo
+                ws_stats.cell(row, 1).value = "Distribucion de Niveles de Riesgo"
+                row += 1
+                risk_dist = analysis.get('Distribucion de Riesgo', {})
+                for level, count in risk_dist.items():
+                    ws_stats.cell(row, 1).value = level
+                    ws_stats.cell(row, 2).value = count
+                    row += 1
+                row += 2
                 
                 # Descriptivas numericas
                 if 'Descriptivas Numericas' in analysis:
@@ -265,14 +361,36 @@ if section == "📥 Descargar Reporte":
                     ws_stats.cell(row, 2).value = count
                     row += 1
                 
+                # Riesgo por departamento
+                if 'Riesgo por Departamento' in analysis:
+                    ws_stats.cell(row, 1).value = "Riesgo por Departamento"
+                    row += 1
+                    dept_risk = pd.DataFrame(analysis['Riesgo por Departamento'])
+                    for r, idx in enumerate(dept_risk.index, start=row):
+                        ws_stats.cell(r, 1).value = idx
+                        for c, col in enumerate(dept_risk.columns, start=2):
+                            ws_stats.cell(r, c).value = dept_risk.loc[idx, col]
+                    row += len(dept_risk) + 2
+                
+                # Riesgo por genero
+                if 'Riesgo por Genero' in analysis:
+                    ws_stats.cell(row, 1).value = "Riesgo por Genero"
+                    row += 1
+                    gender_risk = pd.DataFrame(analysis['Riesgo por Genero'])
+                    for r, idx in enumerate(gender_risk.index, start=row):
+                        ws_stats.cell(r, 1).value = idx
+                        for c, col in enumerate(gender_risk.columns, start=2):
+                            ws_stats.cell(r, c).value = gender_risk.loc[idx, col]
+                
                 # Hoja de visualizaciones
                 ws_viz = wb.create_sheet("Visualizaciones")
                 row_viz = 1
                 for viz_type, col, img_path in visualizations:
                     ws_viz.cell(row_viz, 1).value = f"{viz_type}: {col}"
                     img = Image(img_path)
-                    ws_viz.add_image(img, f'B{row_viz}')
-                    row_viz += 20  # Espacio para imagenes
+                    img.anchor = f'B{row_viz}'
+                    ws_viz.add_image(img)
+                    row_viz += 25  # Aumentar espacio para imagenes
                 
                 # Guardar Excel
                 excel_io = io.BytesIO()
