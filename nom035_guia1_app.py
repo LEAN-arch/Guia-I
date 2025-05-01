@@ -525,7 +525,7 @@ if section == "📋 Evaluación":
                 with col1:
                     enviar = st.form_submit_button("✅ Enviar Guía I", help="Enviar respuestas de Guía I", type="primary")
                 with col2:
-                    cancelar = st.form_submit_button("❌ Cancelar", help="Limpiar formulario",八年type="secondary")
+                    cancelar = st.form_submit_button("❌ Cancelar", help="Limpiar formulario", type="secondary")
                 
                 if enviar:
                     try:
