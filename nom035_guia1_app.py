@@ -66,7 +66,8 @@ LANGUAGES = {
         "optional_field": "(Opcional)",
         "completed": "¡Guía completada exitosamente!",
         "file_not_found": "No hay datos en el registro.",
-        "unexpected_error": "Ocurrió un error inesperado: {error}. Por favor intenta de nuevo o contacta al soporte."
+        "unexpected_error": "Ocurrió un error inesperado: {error}. Por favor intenta de nuevo o contacta al soporte.",
+        "debug_prompt": "Para más detalles, habilite DEBUG_MODE=True en el archivo .env y reinicie la aplicación."
     },
     "en": {
         "title": "NOM-035-STPS-2018 Survey",
@@ -110,7 +111,8 @@ LANGUAGES = {
         "optional_field": "(Optional)",
         "completed": "Guide completed successfully!",
         "file_not_found": "No data in the log.",
-        "unexpected_error": "An unexpected error occurred: {error}. Please try again or contact support."
+        "unexpected_error": "An unexpected error occurred: {error}. Please try again or contact support.",
+        "debug_prompt": "For more details, enable DEBUG_MODE=True in the .env file and restart the application."
     }
 }
 
@@ -214,10 +216,10 @@ GUIDE3_QUESTIONS = [
     {"id": "g3_q13", "text": "Puedo expresar mis ideas.", "text_en": "I can express my ideas.", "type": "likert"},
     {"id": "g3_q14", "text": "Se fomenta la participación en decisiones.", "text_en": "Participation in decisions is encouraged.", "type": "likert"},
     {"id": "g3_q15", "text": "Siento que pertenezco a un equipo.", "text_en": "I feel part of a team.", "type": "likert"},
-    {"id": "g3_q16", "text": "Hay un ambiente de respeto mutuo.", "text_en": "There is mutual respect.", "type": "likert"},
+    {"id": "g 16", "text": "Siscee a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a " + "a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a " + "a a a a a a fd", "text_en": "There is mutual respect.", "type": "likert"},
     {"id": "g3_q17", "text": "Mis compañeros me tratan con cortesía.", "text_en": "My colleagues treat me with courtesy.", "type": "likert"},
     {"id": "g3_q18", "text": "Se promueve la colaboración entre compañeros.", "text_en": "Collaboration is promoted.", "type": "likert"},
-    {"id": "g3_q19", "text": "Hay un buen ambiente laboral.", "text_en": "There is a good work environment.", "type": "likert"},
+    {"id": "g3_q19", "text": "Hay un buen ambiente laboral.", "text_en": "There is a good work environment.", "type": " 
     {"id": "g3_q20", "text": "Se fomenta la confianza entre empleados.", "text_en": "Trust among employees is fostered.", "type": "likert"},
     {"id": "g3_q21", "text": "La empresa promueve un mejor clima laboral.", "text_en": "The company promotes a better work environment.", "type": "likert"},
     {"id": "g3_q22", "text": "Recibo apoyo para balancear mi vida laboral.", "text_en": "I receive support to balance work and life.", "type": "likert"},
@@ -286,12 +288,15 @@ def save_responses_to_log(responses: Dict) -> Tuple[Optional[pd.DataFrame], Opti
             responses_copy = responses.copy()
             responses_copy["timestamp"] = timestamp
             df = pd.DataFrame([responses_copy])
-            existing_df = pd.read_csv(LOG_FILE)
+            try:
+                existing_df = pd.read_csv(LOG_FILE)
+            except pd.errors.EmptyDataError:
+                existing_df = pd.DataFrame(columns=df.columns)
             updated_df = pd.concat([existing_df, df], ignore_index=True)
             updated_df.to_csv(LOG_FILE, index=False)
             logger.info(f"Responses saved to log with timestamp {timestamp}.")
             return df, timestamp
-        except (PermissionError, IOError, pd.errors.EmptyDataError) as e:
+        except (PermissionError, IOError) as e:
             logger.warning(f"Retrying log save due to: {str(e)}")
             time.sleep(1)
     logger.error("Failed to save responses to log after retries.")
@@ -523,78 +528,108 @@ st.markdown("""
 # Sidebar
 def render_sidebar(lang_code: str) -> None:
     """Render the sidebar with language selector and log management."""
+    t = LANGUAGES[lang_code]
     try:
-        t = LANGUAGES[lang_code]
         with st.sidebar:
-            def on_language_change():
-                try:
-                    new_lang = st.session_state.language_selector
-                    old_lang_code = "es" if new_lang != "Español" else "en"
-                    new_lang_code = "es" if new_lang == "Español" else "en"
-                    # Map responses to new language
-                    old_t = LANGUAGES[old_lang_code]
-                    new_t = LANGUAGES[new_lang_code]
-                    for q in GUIDE1_QUESTIONS:
-                        if q["type"] == "yes_no":
-                            if st.session_state.responses.get(q["id"]) == old_t["yes"]:
-                                st.session_state.responses[q["id"]] = new_t["yes"]
-                            elif st.session_state.responses.get(q["id"]) == old_t["no"]:
-                                st.session_state.responses[q["id"]] = new_t["no"]
-                    for q in GUIDE2_QUESTIONS + GUIDE3_QUESTIONS:
-                        old_responses = get_valid_responses(old_lang_code)
-                        new_responses = get_valid_responses(new_lang_code)
-                        if st.session_state.responses.get(q["id"]) in old_responses:
-                            idx = old_responses.index(st.session_state.responses[q["id"]])
-                            st.session_state.responses[q["id"]] = new_responses[idx]
-                    update_trauma_status(st.session_state.responses, new_t)
-                    logger.debug("Language changed successfully.")
+            try:
+                st.markdown(f'<h3 class="subheader">Opciones</h3>', unsafe_allow_html=True)
+                logger.debug("Rendering language selector")
+                
+                def on_language_change():
                     try:
-                        st.rerun()
+                        new_lang = st.session_state.get("language_selector", "Español")
+                        old_lang_code = "es" if new_lang != "Español" else "en"
+                        new_lang_code = "es" if new_lang == "Español" else "en"
+                        old_t = LANGUAGES[old_lang_code]
+                        new_t = LANGUAGES[new_lang_code]
+                        
+                        # Map responses to new language
+                        for q in GUIDE1_QUESTIONS:
+                            if q["type"] == "yes_no":
+                                current_response = st.session_state.responses.get(q["id"])
+                                if current_response == old_t["yes"]:
+                                    st.session_state.responses[q["id"]] = new_t["yes"]
+                                elif current_response == old_t["no"]:
+                                    st.session_state.responses[q["id"]] = new_t["no"]
+                        for q in GUIDE2_QUESTIONS + GUIDE3_QUESTIONS:
+                            old_responses = get_valid_responses(old_lang_code)
+                            new_responses = get_valid_responses(new_lang_code)
+                            current_response = st.session_state.responses.get(q["id"])
+                            if current_response in old_responses:
+                                idx = old_responses.index(current_response)
+                                st.session_state.responses[q["id"]] = new_responses[idx]
+                        
+                        update_trauma_status(st.session_state.responses, new_t)
+                        logger.debug(f"Language changed to {new_lang}")
                     except Exception as e:
-                        logger.error(f"Error during language change rerun: {str(e)}")
-                        st.error(t["unexpected_error"].format(error=str(e)) if DEBUG_MODE else t["unexpected_error"].format(error="Language change failed"))
-                except Exception as e:
-                    logger.error(f"Error during language change: {str(e)}")
-                    st.error(t["unexpected_error"].format(error=str(e)) if DEBUG_MODE else t["unexpected_error"].format(error="Language change failed"))
+                        logger.error(f"Error in on_language_change: {str(e)}")
+                        st.error(f"{t['unexpected_error'].format(error=str(e))} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Language change failed"))
 
-            st.selectbox("Language / Idioma", ["Español", "English"], key="language_selector", on_change=on_language_change, label="Select Language")
-            
-            st.markdown(f'<h3 class="subheader">{t["download_log"]}</h3>', unsafe_allow_html=True)
-            password_download = st.text_input(t["password_prompt"], type="password", key="download_password", label="Download Password")
-            if st.button(t["download_log"], key="download_button"):
-                if action_lock():
-                    hashed_input = hash_password(password_download, SALT)
-                    if hashed_input == CORRECT_PASSWORD_HASH:
-                        try:
-                            if not os.path.exists(LOG_FILE) or os.path.getsize(LOG_FILE) == 0:
+                st.selectbox(
+                    "Language / Idioma",
+                    ["Español", "English"],
+                    key="language_selector",
+                    on_change=on_language_change,
+                    label="Select Language"
+                )
+            except Exception as e:
+                logger.error(f"Failed to render language selector: {str(e)}")
+                st.warning("Language selector failed to load.")
+
+            try:
+                st.markdown(f'<h3 class="subheader">{t["download_log"]}</h3>', unsafe_allow_html=True)
+                password_download = st.text_input(
+                    t["password_prompt"],
+                    type="password",
+                    key="download_password",
+                    label="Download Password"
+                )
+                if st.button(t["download_log"], key="download_button"):
+                    if action_lock():
+                        hashed_input = hash_password(password_download, SALT)
+                        if hashed_input == CORRECT_PASSWORD_HASH:
+                            try:
+                                if not os.path.exists(LOG_FILE) or os.path.getsize(LOG_FILE) == 0:
+                                    st.warning(t["file_not_found"])
+                                else:
+                                    with open(LOG_FILE, "rb") as f:
+                                        csv_bytes = f.read()
+                                    b64 = base64.b64encode(csv_bytes).decode()
+                                    href = f'<a href="data:file/csv;base64,{b64}" download="nom035_log.csv" role="button" aria-label="Download Log CSV">Download Log CSV</a>'
+                                    st.markdown(href, unsafe_allow_html=True)
+                            except (FileNotFoundError, IOError) as e:
+                                logger.error(f"Failed to download log: {str(e)}")
                                 st.warning(t["file_not_found"])
-                            else:
-                                with open(LOG_FILE, "rb") as f:
-                                    csv_bytes = f.read()
-                                b64 = base64.b64encode(csv_bytes).decode()
-                                href = f'<a href="data:file/csv;base64,{b64}" download="nom035_log.csv" role="button" aria-label="Download Log CSV">Download Log CSV</a>'
-                                st.markdown(href, unsafe_allow_html=True)
-                        except (FileNotFoundError, IOError) as e:
-                            logger.error(f"Failed to download log: {str(e)}")
-                            st.error(t["file_not_found"])
-                    else:
-                        st.error(t["incorrect_password"])
-
-            st.markdown(f'<h3 class="subheader">{t["refresh_log"]}</h3>', unsafe_allow_html=True)
-            password_refresh = st.text_input(t["password_prompt"], type="password", key="refresh_password", label="Refresh Password")
-            if st.button(t["refresh_log"], key="refresh_button"):
-                if action_lock():
-                    hashed_input = hash_password(password_refresh, SALT)
-                    if hashed_input == CORRECT_PASSWORD_HASH:
-                        if refresh_log():
-                            st.success(t["log_refreshed"])
                         else:
-                            st.error("Failed to refresh log.")
-                    else:
-                        st.error(t["incorrect_password"])
+                            st.error(t["incorrect_password"])
+            except Exception as e:
+                logger.error(f"Failed to render download log section: {str(e)}")
+                st.warning("Download log section failed to load.")
+
+            try:
+                st.markdown(f'<h3 class="subheader">{t["refresh_log"]}</h3>', unsafe_allow_html=True)
+                password_refresh = st.text_input(
+                    t["password_prompt"],
+                    type="password",
+                    key="refresh_password",
+                    label="Refresh Password"
+                )
+                if st.button(t["refresh_log"], key="refresh_button"):
+                    if action_lock():
+                        hashed_input = hash_password(password_refresh, SALT)
+                        if hashed_input == CORRECT_PASSWORD_HASH:
+                            if refresh_log():
+                                st.success(t["log_refreshed"])
+                            else:
+                                st.error("Failed to refresh log.")
+                        else:
+                            st.error(t["incorrect_password"])
+            except Exception as e:
+                logger.error(f"Failed to render refresh log section: {str(e)}")
+                st.warning("Refresh log section failed to load.")
     except Exception as e:
         logger.error(f"Error rendering sidebar: {str(e)}")
-        st.error(t["unexpected_error"].format(error=str(e)) if DEBUG_MODE else t["unexpected_error"].format(error="Sidebar rendering failed"))
+        st.error(f"{t['unexpected_error'].format(error=str(e))} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Sidebar rendering failed"))
 
 def action_lock() -> bool:
     """Prevent rapid button clicks with a 1-second debounce."""
@@ -700,7 +735,7 @@ def validate_responses(responses: Dict, guide_questions: List, guide_id: str, is
         return errors
     except Exception as e:
         logger.error(f"Error in validate_responses: {str(e)}")
-        st.error(t["unexpected_error"].format(error=str(e)) if DEBUG_MODE else t["unexpected_error"].format(error="Validation failed"))
+        st.error(f"{t['unexpected_error'].format(error=str(e))} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Validation failed"))
         return {}
 
 def render_question(q: Dict, lang_code: str, t: Dict, guide_id: str) -> None:
@@ -789,7 +824,7 @@ def render_question(q: Dict, lang_code: str, t: Dict, guide_id: str) -> None:
         st.markdown('</div>', unsafe_allow_html=True)
     except Exception as e:
         logger.error(f"Error rendering question {q['id']}: {str(e)}")
-        st.error(t["unexpected_error"].format(error=str(e)) if DEBUG_MODE else t["unexpected_error"].format(error="Question rendering failed"))
+        st.error(f"{t['unexpected_error'].format(error=str(e))} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Question rendering failed"))
 
 # Main App
 def main():
@@ -911,7 +946,7 @@ def main():
         st.markdown('</div>', unsafe_allow_html=True)
     except Exception as e:
         logger.error(f"Unexpected error in main: {str(e)}")
-        st.error(t["unexpected_error"].format(error=str(e)) if DEBUG_MODE else t["unexpected_error"].format(error="Application failed to load"))
+        st.error(f"{t['unexpected_error'].format(error=str(e))} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Application failed to load"))
 
 if __name__ == "__main__":
     main()
