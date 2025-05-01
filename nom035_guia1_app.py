@@ -17,8 +17,8 @@ DEBUG_MODE = True  # Enabled for debugging
 # Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
-PASSWORD = os.getenv("NOM35", "NOM35")
-SALT = os.getenv("NOM35", secrets.token_hex(16))
+PASSWORD = os.getenv("SURVEY_PASSWORD", "securepassword123")
+SALT = os.getenv("SURVEY_SALT", secrets.token_hex(16))
 
 # Validate environment variables
 if not PASSWORD or not SALT:
@@ -622,23 +622,37 @@ except Exception as e:
 def calculate_progress() -> float:
     """Calculate survey completion progress."""
     try:
-        total_questions = len(GUIDE1_QUESTIONS) + 2  # +2 for mandatory name subfields
-        if st.session_state.has_trauma:
-            total_questions += len(GUIDE2_QUESTIONS) + len(GUIDE3_QUESTIONS)
-
-        answered_questions = 0
+        # Define required fields for Guía I
         required_keys = (
             [subfield["id"] for q in GUIDE1_QUESTIONS if q["type"] == "text_group" for subfield in q["subfields"] if not subfield.get("optional", False)]
             + [q["id"] for q in GUIDE1_QUESTIONS if q["type"] != "text_group"]
         )
-        if st.session_state.has_trauma:
+        total_questions = len(required_keys)  # Count only required fields in Guía I initially
+
+        # Add Guía II and III if trauma is reported and not yet completed
+        if st.session_state.has_trauma and not st.session_state.guide3_complete:
             required_keys += [q["id"] for q in GUIDE2_QUESTIONS] + [q["id"] for q in GUIDE3_QUESTIONS]
+            total_questions += len(GUIDE2_QUESTIONS) + len(GUIDE3_QUESTIONS)
 
+        answered_questions = 0
         for key in required_keys:
-            if key in st.session_state.responses and st.session_state.responses[key] not in [None, "", 0]:
-                answered_questions += 1
+            response = st.session_state.responses.get(key)
+            if response is not None:
+                if isinstance(response, str):
+                    if response.strip():  # Count non-whitespace strings
+                        answered_questions += 1
+                elif isinstance(response, (int, float)):
+                    if response != 0:  # Count non-zero numbers
+                        answered_questions += 1
+                else:
+                    answered_questions += 1  # Count other non-None responses (e.g., select options)
 
-        return answered_questions / total_questions if total_questions > 0 else 0
+        progress = answered_questions / total_questions if total_questions > 0 else 0
+        if DEBUG_MODE:
+            logger.debug(f"Progress: {answered_questions}/{total_questions} = {progress:.2%}")
+            logger.debug(f"Required keys: {required_keys}")
+            logger.debug(f"Responses: {st.session_state.responses}")
+        return progress
     except Exception as e:
         logger.error(f"Error in calculate_progress: {str(e)}")
         return 0
