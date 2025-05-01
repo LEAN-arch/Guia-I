@@ -528,7 +528,11 @@ def render_sidebar(lang_code: str) -> None:
                     idx = old_responses.index(st.session_state.responses[q["id"]])
                     st.session_state.responses[q["id"]] = new_responses[idx]
             update_trauma_status(st.session_state.responses, new_t)
-            st.experimental_rerun()
+            try:
+                st.rerun()
+            except Exception as e:
+                logger.error(f"Error during language change rerun: {str(e)}")
+                st.error("Failed to update language. Please try again.")
         
         st.selectbox("Language / Idioma", ["Español", "English"], key="language_selector", on_change=on_language_change)
         
@@ -609,37 +613,39 @@ def validate_responses(responses: Dict, guide_questions: List, guide_id: str, is
     errors = {}
     
     if is_guide1:
-        for subfield in GUIDE1_QUESTIONS[0]["subfields"]:
-            if not subfield.get("optional", False):
-                value = responses.get(subfield["id"], "").strip()
-                if not value:
-                    field_label = subfield["label" if lang_code == "es" else "label_en"]
-                    errors[subfield["id"]] = t["missing_field"].format(field=field_label)
-                    logger.debug(f"Validation failed for {subfield['id']}: Value='{value}'")
+        # Validate text_group subfields
+        for q in guide_questions:
+            if q["type"] == "text_group":
+                for subfield in q["subfields"]:
+                    if not subfield.get("optional", False):
+                        value = responses.get(subfield["id"], "").strip()
+                        if not value:
+                            field_label = subfield["label" if lang_code == "es" else "label_en"]
+                            errors[subfield["id"]] = t["missing_field"].format(field=field_label)
+                            logger.debug(f"Validation failed for {subfield['id']}: Value='{value}'")
         
+        # Validate age
         age = responses.get("g1_q2")
         if not isinstance(age, (int, float)) or not (18 <= age <= 100):
             errors["g1_q2"] = t["invalid_age"]
         
+        # Validate years worked
         years_worked = responses.get("g1_q4")
         if isinstance(age, (int, float)) and isinstance(years_worked, (int, float)) and not (0 <= years_worked <= age):
             errors["g1_q4"] = t["invalid_years_worked"]
     
-    required_keys = [q["id"] for q in guide_questions]
-    if is_guide1:
-        required_keys += [subfield["id"] for q in guide_questions if q.get("type") == "text_group" for subfield in q["subfields"] if not subfield.get("optional", False)]
-    
-    valid_responses = get_valid_responses(lang_code) if not is_guide1 else [t["yes"], t["no"]]
-    for key in required_keys:
-        value = responses.get(key)
-        if value is None or (isinstance(value, str) and not value.strip()):
-            question_text = next((q["text" if lang_code == "es" else "text_en"] for q in guide_questions if q["id"] == key), key)
-            errors[key] = t["missing_field"].format(field=question_text)
-            logger.debug(f"Validation failed for {key}: Value='{value}'")
-        elif not is_guide1 and value not in valid_responses:
-            question_text = next((q["text" if lang_code == "es" else "text_en"] for q in guide_questions if q["id"] == key), key)
-            errors[key] = t["missing_field"].format(field=question_text)
-            logger.debug(f"Validation failed for {key}: Invalid response='{value}'")
+    # Validate other questions
+    for q in guide_questions:
+        if q["type"] != "text_group":
+            key = q["id"]
+            value = responses.get(key)
+            valid_responses = get_valid_responses(lang_code) if q.get("type") == "likert" else [t["yes"], t["no"]] if q["type"] == "yes_no" else q["options" if lang_code == "es" else "options_en"]
+            if value is None or (isinstance(value, str) and not value.strip()):
+                errors[key] = t["missing_field"].format(field=q["text" if lang_code == "es" else "text_en"])
+                logger.debug(f"Validation failed for {key}: Value='{value}'")
+            elif value not in valid_responses:
+                errors[key] = t["missing_field"].format(field=q["text" if lang_code == "es" else "text_en"])
+                logger.debug(f"Validation failed for {key}: Invalid response='{value}'")
     
     st.session_state.validation_errors[guide_id] = errors
     return errors
@@ -730,132 +736,156 @@ def render_question(q: Dict, lang_code: str, t: Dict, guide_id: str) -> None:
 
 # Main App
 def main():
-    initialize_session_state()
-    lang = st.session_state.language_selector
-    lang_code = "es" if lang == "Español" else "en"
-    t = LANGUAGES[lang_code]
+    try:
+        initialize_session_state()
+        lang = st.session_state.language_selector
+        lang_code = "es" if lang == "Español" else "en"
+        t = LANGUAGES[lang_code]
 
-    render_sidebar(lang_code)
+        render_sidebar(lang_code)
 
-    st.markdown('<div class="container">', unsafe_allow_html=True)
-    st.markdown(f'<h1 class="header">{t["title"]}</h1>', unsafe_allow_html=True)
-    st.write(t["welcome"])
+        st.markdown('<div class="container">', unsafe_allow_html=True)
+        st.markdown(f'<h1 class="header">{t["title"]}</h1>', unsafe_allow_html=True)
+        st.write(t["welcome"])
 
-    progress = calculate_progress()
-    st.progress(progress)
-    st.markdown(f'<p class="tooltip">{t["progress"]}: {int(progress * 100)}%</p>', unsafe_allow_html=True)
+        progress = calculate_progress()
+        st.progress(progress)
+        st.markdown(f'<p class="tooltip">{t["progress"]}: {int(progress * 100)}%</p>', unsafe_allow_html=True)
 
-    # Guide I
-    if not st.session_state.guide1_complete:
-        st.markdown(f'<h2 class="header">{t["guide1"]}</h2>', unsafe_allow_html=True)
-        st.markdown(f'<p class="tooltip">{t["tooltip_guide1"]}</p>', unsafe_allow_html=True)
+        # Guide I
+        if not st.session_state.guide1_complete:
+            st.markdown(f'<h2 class="header">{t["guide1"]}</h2>', unsafe_allow_html=True)
+            st.markdown(f'<p class="tooltip">{t["tooltip_guide1"]}</p>', unsafe_allow_html=True)
 
-        guide1_groups = [
-            ("personal_info", t["personal_info"], GUIDE1_QUESTIONS[:7]),
-            ("traumatic_events", t["traumatic_events"], GUIDE1_QUESTIONS[7:13]),
-            ("persistent_memories", t["persistent_memories"], GUIDE1_QUESTIONS[13:15]),
-            ("avoidance_efforts", t["avoidance_efforts"], GUIDE1_QUESTIONS[15:22]),
-            ("affectation", t["affectation"], GUIDE1_QUESTIONS[22:])
-        ]
+            guide1_groups = [
+                ("personal_info", t["personal_info"], GUIDE1_QUESTIONS[:7]),
+                ("traumatic_events", t["traumatic_events"], GUIDE1_QUESTIONS[7:13]),
+                ("persistent_memories", t["persistent_memories"], GUIDE1_QUESTIONS[13:15]),
+                ("avoidance_efforts", t["avoidance_efforts"], GUIDE1_QUESTIONS[15:22]),
+                ("affectation", t["affectation"], GUIDE1_QUESTIONS[22:])
+            ]
 
-        for group_id, group_label, questions in guide1_groups:
-            with st.expander(group_label, expanded=True):
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                for q in questions:
-                    render_question(q, lang_code, t, "guide1")
-                st.markdown('</div>', unsafe_allow_html=True)
+            for group_id, group_label, questions in guide1_groups:
+                with st.expander(group_label, expanded=True):
+                    st.markdown('<div class="card">', unsafe_allow_html=True)
+                    for q in questions:
+                        render_question(q, lang_code, t, "guide1")
+                    st.markdown('</div>', unsafe_allow_html=True)
 
-        col1, col2 = st.columns([1, 1])
-        with col2:
-            if st.button(t["submit"], key="submit_guide1"):
-                if action_lock():
-                    errors = validate_responses(st.session_state.responses, GUIDE1_QUESTIONS, "guide1", is_guide1=True, lang_code=lang_code)
-                    if errors:
-                        for error in errors.values():
-                            st.error(error)
-                    else:
-                        st.session_state.guide1_complete = True
-                        if not st.session_state.has_trauma:
+            col1, col2 = st.columns([1, 1])
+            with col2:
+                if st.button(t["submit"], key="submit_guide1"):
+                    if action_lock():
+                        errors = validate_responses(st.session_state.responses, GUIDE1_QUESTIONS, "guide1", is_guide1=True, lang_code=lang_code)
+                        if errors:
+                            for error in errors.values():
+                                st.error(error)
+                        else:
+                            st.session_state.guide1_complete = True
+                            if not st.session_state.has_trauma:
+                                save_responses_to_log(st.session_state.responses)
+                            st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
+                        try:
+                            st.rerun()
+                        except Exception as e:
+                            logger.error(f"Error during Guide I rerun: {str(e)}")
+                            st.error("Failed to proceed. Please try again.")
+
+        # Guide II
+        if st.session_state.guide1_complete and st.session_state.has_trauma and not st.session_state.guide2_complete:
+            st.markdown(f'<h2 class="header">{t["guide2"]}</h2>', unsafe_allow_html=True)
+            st.markdown(f'<p class="tooltip">{t["tooltip_guide2"]}</p>', unsafe_allow_html=True)
+
+            for q in GUIDE2_QUESTIONS:
+                q["type"] = "likert"
+
+            guide2_groups = [
+                ("work_conditions", t["work_conditions"], [q for q in GUIDE2_QUESTIONS if q["group"] == "work_conditions"]),
+                ("workload_pace", t["workload_pace"], [q for q in GUIDE2_QUESTIONS if q["group"] == "workload_pace"]),
+                ("control_decision", t["control_decision"], [q for q in GUIDE2_QUESTIONS if q["group"] == "control_decision"]),
+                ("work_relationships", t["work_relationships"], [q for q in GUIDE2_QUESTIONS if q["group"] == "work_relationships"]),
+                ("work_life_balance", t["work_life_balance"], [q for q in GUIDE2_QUESTIONS if q["group"] == "work_life_balance"])
+            ]
+
+            for group_id, group_label, questions in guide2_groups:
+                with st.expander(group_label, expanded=True):
+                    st.markdown('<div class="card">', unsafe_allow_html=True)
+                    for q in questions:
+                        render_question(q, lang_code, t, "guide2")
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                if st.button(t["previous"], key="prev_guide2", type="secondary"):
+                    if action_lock():
+                        st.session_state.guide1_complete = False
+                        st.session_state.validation_errors["guide1"] = {}
+                        try:
+                            st.rerun()
+                        except Exception as e:
+                            logger.error(f"Error during Guide II previous rerun: {str(e)}")
+                            st.error("Failed to go back. Please try again.")
+            with col2:
+                if st.button(t["submit"], key="submit_guide2"):
+                    if action_lock():
+                        errors = validate_responses(st.session_state.responses, GUIDE2_QUESTIONS, "guide2", lang_code=lang_code)
+                        if errors:
+                            for error in errors.values():
+                                st.error(error)
+                        else:
+                            st.session_state.guide2_complete = True
+                            st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
+                        try:
+                            st.rerun()
+                        except Exception as e:
+                            logger.error(f"Error during Guide II submit rerun: {str(e)}")
+                            st.error("Failed to proceed. Please try again.")
+
+        # Guide III
+        if st.session_state.guide2_complete and st.session_state.has_trauma and not st.session_state.guide3_complete:
+            st.markdown(f'<h2 class="header">{t["guide3"]}</h2>', unsafe_allow_html=True)
+            st.markdown(f'<p class="tooltip">{t["tooltip_guide3"]}</p>', unsafe_allow_html=True)
+
+            for q in GUIDE3_QUESTIONS:
+                q["type"] = "likert"
+
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            for q in GUIDE3_QUESTIONS:
+                render_question(q, lang_code, t, "guide3")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                if st.button(t["previous"], key="prev_guide3", type="secondary"):
+                    if action_lock():
+                        st.session_state.guide2_complete = False
+                        st.session_state.validation_errors["guide2"] = {}
+                        try:
+                            st.rerun()
+                        except Exception as e:
+                            logger.error(f"Error during Guide III previous rerun: {str(e)}")
+                            st.error("Failed to go back. Please try again.")
+            with col2:
+                if st.button(t["submit"], key="submit_guide3"):
+                    if action_lock():
+                        errors = validate_responses(st.session_state.responses, GUIDE3_QUESTIONS, "guide3", lang_code=lang_code)
+                        if errors:
+                            for error in errors.values():
+                                st.error(error)
+                        else:
+                            st.session_state.guide3_complete = True
                             save_responses_to_log(st.session_state.responses)
-                        st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
-                    st.experimental_rerun()
+                            st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
+                        try:
+                            st.rerun()
+                        except Exception as e:
+                            logger.error(f"Error during Guide III submit rerun: {str(e)}")
+                            st.error("Failed to proceed. Please try again.")
 
-    # Guide II
-    if st.session_state.guide1_complete and st.session_state.has_trauma and not st.session_state.guide2_complete:
-        st.markdown(f'<h2 class="header">{t["guide2"]}</h2>', unsafe_allow_html=True)
-        st.markdown(f'<p class="tooltip">{t["tooltip_guide2"]}</p>', unsafe_allow_html=True)
-
-        for q in GUIDE2_QUESTIONS:
-            q["type"] = "likert"
-
-        guide2_groups = [
-            ("work_conditions", t["work_conditions"], [q for q in GUIDE2_QUESTIONS if q["group"] == "work_conditions"]),
-            ("workload_pace", t["workload_pace"], [q for q in GUIDE2_QUESTIONS if q["group"] == "workload_pace"]),
-            ("control_decision", t["control_decision"], [q for q in GUIDE2_QUESTIONS if q["group"] == "control_decision"]),
-            ("work_relationships", t["work_relationships"], [q for q in GUIDE2_QUESTIONS if q["group"] == "work_relationships"]),
-            ("work_life_balance", t["work_life_balance"], [q for q in GUIDE2_QUESTIONS if q["group"] == "work_life_balance"])
-        ]
-
-        for group_id, group_label, questions in guide2_groups:
-            with st.expander(group_label, expanded=True):
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                for q in questions:
-                    render_question(q, lang_code, t, "guide2")
-                st.markdown('</div>', unsafe_allow_html=True)
-
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            if st.button(t["previous"], key="prev_guide2", type="secondary"):
-                if action_lock():
-                    st.session_state.guide1_complete = False
-                    st.session_state.validation_errors["guide1"] = {}
-                    st.experimental_rerun()
-        with col2:
-            if st.button(t["submit"], key="submit_guide2"):
-                if action_lock():
-                    errors = validate_responses(st.session_state.responses, GUIDE2_QUESTIONS, "guide2", lang_code=lang_code)
-                    if errors:
-                        for error in errors.values():
-                            st.error(error)
-                    else:
-                        st.session_state.guide2_complete = True
-                        st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
-                    st.experimental_rerun()
-
-    # Guide III
-    if st.session_state.guide2_complete and st.session_state.has_trauma and not st.session_state.guide3_complete:
-        st.markdown(f'<h2 class="header">{t["guide3"]}</h2>', unsafe_allow_html=True)
-        st.markdown(f'<p class="tooltip">{t["tooltip_guide3"]}</p>', unsafe_allow_html=True)
-
-        for q in GUIDE3_QUESTIONS:
-            q["type"] = "likert"
-
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        for q in GUIDE3_QUESTIONS:
-            render_question(q, lang_code, t, "guide3")
         st.markdown('</div>', unsafe_allow_html=True)
-
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            if st.button(t["previous"], key="prev_guide3", type="secondary"):
-                if action_lock():
-                    st.session_state.guide2_complete = False
-                    st.session_state.validation_errors["guide2"] = {}
-                    st.experimental_rerun()
-        with col2:
-            if st.button(t["submit"], key="submit_guide3"):
-                if action_lock():
-                    errors = validate_responses(st.session_state.responses, GUIDE3_QUESTIONS, "guide3", lang_code=lang_code)
-                    if errors:
-                        for error in errors.values():
-                            st.error(error)
-                    else:
-                        st.session_state.guide3_complete = True
-                        save_responses_to_log(st.session_state.responses)
-                        st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
-                    st.experimental_rerun()
-
-    st.markdown('</div>', unsafe_allow_html=True)
+    except Exception as e:
+        logger.error(f"Unexpected error in main: {str(e)}")
+        st.error("An unexpected error occurred. Please try again or contact support.")
 
 if __name__ == "__main__":
     main()
