@@ -39,7 +39,7 @@ LANGUAGES = {
         "password_prompt": "Ingrese la contraseña:",
         "incorrect_password": "Contraseña incorrecta",
         "progress": "Progreso",
-        "yes": "Si",
+        "yes": "Sí",
         "no": "No",
         "always": "Siempre",
         "almost_always": "Casi siempre",
@@ -512,6 +512,8 @@ if "last_action_time" not in st.session_state:
     st.session_state.last_action_time = 0
 if "validation_errors" not in st.session_state:
     st.session_state.validation_errors = {}
+if "show_guide2" not in st.session_state:
+    st.session_state.show_guide2 = False
 
 # Streamlit Configuration
 st.set_page_config(page_title="NOM-035 Survey", layout="wide")
@@ -528,7 +530,7 @@ st.markdown(
         background-color: #1B5E20; transform: scale(1.05);
     }
     .stProgress .st-bo {background-color: #2E7D32;}
-    .container {max-width: 1200px; margin: 0 auto; padding: 20px;}
+    .container {max-width: 1200px; margin: 0 auto; padding: 20px; min-height: 100vh;}
     .card {background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 20px;}
     .header {font-size: 24px; font-weight: 700; color: #1A237E; margin-bottom: 10px;}
     .question {font-size: 18px; font-weight: 500; color: #333; margin-bottom: 10px;}
@@ -556,6 +558,9 @@ st.markdown(
         color: #2E7D32; font-size: 16px; font-weight: 500; text-align: center;
         animation: fadeIn 0.5s ease-in;
     }
+    .guide-section {opacity: 0; transform: translateY(20px); transition: opacity 0.5s ease, transform 0.5s ease;}
+    .guide-section.visible {opacity: 1; transform: translateY(0);}
+    .disabled-section {opacity: 0.5; pointer-events: none;}
     @keyframes fadeIn {from {opacity: 0;} to {opacity: 1;}}
     @media (max-width: 600px) {
         .container {padding: 10px;}
@@ -565,6 +570,18 @@ st.markdown(
         .stButton>button {width: 100%;}
     }
     </style>
+    <script>
+        function scrollToGuide2() {
+            const guide2 = document.getElementById('guide2-section');
+            if (guide2) {
+                guide2.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+        function maintainScrollPosition() {
+            const currentPosition = window.scrollY;
+            setTimeout(() => window.scrollTo(0, currentPosition), 0);
+        }
+    </script>
 """,
     unsafe_allow_html=True,
 )
@@ -640,6 +657,8 @@ def calculate_progress() -> float:
                 apellido = st.session_state.responses.get("g1_q1_apellido", "").strip()
                 if nombre and apellido:
                     answered_questions += 1
+                    if DEBUG_MODE:
+                        logger.debug(f"g1_q1 answered: nombre='{nombre}', apellido='{apellido}'")
             else:
                 response = st.session_state.responses.get(key)
                 if response is not None:
@@ -651,6 +670,8 @@ def calculate_progress() -> float:
                             answered_questions += 1
                     else:
                         answered_questions += 1  # Count other non-None responses (e.g., select options)
+                if DEBUG_MODE:
+                    logger.debug(f"Key {key}: response='{response}', counted={response is not None and (not isinstance(response, str) or response.strip())}")
 
         progress = answered_questions / total_questions if total_questions > 0 else 0
         if DEBUG_MODE:
@@ -718,18 +739,20 @@ try:
     VALID_RESPONSES_GUIDE2_3 = [t["always"], t["almost_always"], t["sometimes"], t["almost_never"], t["never"]]
 
     # Guía I
+    guide1_class = "guide-section disabled-section" if st.session_state.guide1_complete else "guide-section visible"
+    st.markdown(f'<div id="guide1-section" class="{guide1_class}">', unsafe_allow_html=True)
+    st.markdown(f'<h2 class="header">{t["guide1"]}</h2>', unsafe_allow_html=True)
+    st.markdown(f'<p class="tooltip">{t["tooltip_guide1"]}</p>', unsafe_allow_html=True)
+
+    guide1_groups = [
+        ("personal_info", t["personal_info"], GUIDE1_QUESTIONS[:7]),
+        ("traumatic_events", t["traumatic_events"], GUIDE1_QUESTIONS[7:13]),
+        ("persistent_memories", t["persistent_memories"], GUIDE1_QUESTIONS[13:15]),
+        ("avoidance_efforts", t["avoidance_efforts"], GUIDE1_QUESTIONS[15:22]),
+        ("affectation", t["affectation"], GUIDE1_QUESTIONS[22:]),
+    ]
+
     if not st.session_state.guide1_complete:
-        st.markdown(f'<h2 class="header">{t["guide1"]}</h2>', unsafe_allow_html=True)
-        st.markdown(f'<p class="tooltip">{t["tooltip_guide1"]}</p>', unsafe_allow_html=True)
-
-        guide1_groups = [
-            ("personal_info", t["personal_info"], GUIDE1_QUESTIONS[:7]),
-            ("traumatic_events", t["traumatic_events"], GUIDE1_QUESTIONS[7:13]),
-            ("persistent_memories", t["persistent_memories"], GUIDE1_QUESTIONS[13:15]),
-            ("avoidance_efforts", t["avoidance_efforts"], GUIDE1_QUESTIONS[15:22]),
-            ("affectation", t["affectation"], GUIDE1_QUESTIONS[22:]),
-        ]
-
         for group_id, group_label, questions in guide1_groups:
             with st.expander(group_label, expanded=True):
                 st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -751,6 +774,7 @@ try:
                                 key=subfield["id"],
                                 placeholder=subfield["placeholder" if lang_code == "es" else "placeholder_en"],
                                 value=st.session_state.responses.get(subfield["id"], ""),
+                                disabled=st.session_state.guide1_complete,
                             )
                             st.session_state.responses[subfield["id"]] = response
                             if is_invalid:
@@ -772,6 +796,7 @@ try:
                             format="%d",
                             label_visibility="collapsed",
                             value=st.session_state.responses.get(q["id"], 0),
+                            disabled=st.session_state.guide1_complete,
                         )
                         st.session_state.responses[q["id"]] = response
                         if is_invalid:
@@ -791,6 +816,7 @@ try:
                             label_visibility="collapsed",
                             index=None,
                             placeholder="Seleccione / Select",
+                            disabled=st.session_state.guide1_complete,
                         )
                         st.session_state.responses[q["id"]] = response
                         if is_invalid:
@@ -809,6 +835,7 @@ try:
                             [t["yes"], t["no"]],
                             key=q["id"],
                             label_visibility="collapsed",
+                            disabled=st.session_state.guide1_complete,
                         )
                         st.session_state.responses[q["id"]] = response
                         if is_invalid:
@@ -822,7 +849,7 @@ try:
                             st.session_state.has_trauma = True
                 st.markdown('</div>', unsafe_allow_html=True)
 
-        if st.button(t["submit"], key="submit_guide1"):
+        if st.button(t["submit"], key="submit_guide1", disabled=st.session_state.guide1_complete):
             if action_lock():
                 st.session_state.validation_errors = validate_responses(st.session_state.responses, GUIDE1_QUESTIONS, is_guide1=True)
                 if st.session_state.validation_errors:
@@ -831,12 +858,20 @@ try:
                 else:
                     st.session_state.validation_errors = {}
                     st.session_state.guide1_complete = True
-                    if not st.session_state.has_trauma:
+                    if st.session_state.has_trauma:
+                        st.session_state.show_guide2 = True
+                        st.markdown('<script>scrollToGuide2();</script>', unsafe_allow_html=True)
+                    else:
                         save_responses_to_log()
                     st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
+                    st.experimental_rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # Guía II
     if st.session_state.guide1_complete and st.session_state.has_trauma and not st.session_state.guide2_complete:
+        guide2_class = "guide-section visible" if st.session_state.show_guide2 else "guide-section"
+        st.markdown(f'<div id="guide2-section" class="{guide2_class}">', unsafe_allow_html=True)
         st.markdown(f'<h2 class="header">{t["guide2"]}</h2>', unsafe_allow_html=True)
         st.markdown(f'<p class="tooltip">{t["tooltip_guide2"]}</p>', unsafe_allow_html=True)
 
@@ -890,9 +925,13 @@ try:
                     st.session_state.validation_errors = {}
                     st.session_state.guide2_complete = True
                     st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
+                    st.experimental_rerun()
+
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # Guía III
     if st.session_state.guide2_complete and st.session_state.has_trauma and not st.session_state.guide3_complete:
+        st.markdown('<div id="guide3-section" class="guide-section visible">', unsafe_allow_html=True)
         st.markdown(f'<h2 class="header">{t["guide3"]}</h2>', unsafe_allow_html=True)
         st.markdown(f'<p class="tooltip">{t["tooltip_guide3"]}</p>', unsafe_allow_html=True)
 
@@ -937,6 +976,7 @@ try:
                     st.session_state.guide3_complete = True
                     save_responses_to_log()
                     st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
+                    st.experimental_rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
 except Exception as e:
