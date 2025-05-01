@@ -17,8 +17,8 @@ DEBUG_MODE = True  # Enabled for debugging
 # Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
-PASSWORD = os.getenv("SURVEY_PASSWORD", "securepassword123")
-SALT = os.getenv("SURVEY_SALT", secrets.token_hex(16))
+PASSWORD = os.getenv("NOM35", "NOM35")
+SALT = os.getenv("NOM35", secrets.token_hex(16))
 
 # Validate environment variables
 if not PASSWORD or not SALT:
