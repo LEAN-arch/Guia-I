@@ -22,7 +22,6 @@ LANGUAGES = {
         "guide2": "Guía II: Factores de Riesgo Psicosocial",
         "guide3": "Guía III: Entorno Organizacional Favorable",
         "submit": "Enviar",
-        "reset": "Reiniciar Respuestas",
         "download_log": "Descargar Registro",
         "password_prompt": "Ingrese la contraseña para descargar el registro:",
         "incorrect_password": "Contraseña incorrecta",
@@ -54,7 +53,6 @@ LANGUAGES = {
         "guide2": "Guide II: Psychosocial Risk Factors",
         "guide3": "Guide III: Favorable Organizational Environment",
         "submit": "Submit",
-        "reset": "Reset Responses",
         "download_log": "Download Log",
         "password_prompt": "Enter the password to download the log:",
         "incorrect_password": "Incorrect password",
@@ -218,10 +216,6 @@ if "has_trauma" not in st.session_state:
     st.session_state.has_trauma = False
 if "last_action_time" not in st.session_state:
     st.session_state.last_action_time = 0
-if "guide2_page" not in st.session_state:
-    st.session_state.guide2_page = 0
-if "guide3_page" not in st.session_state:
-    st.session_state.guide3_page = 0
 
 # Streamlit app configuration
 st.set_page_config(page_title="NOM-035 Survey", layout="wide")
@@ -248,29 +242,6 @@ st.markdown("""
 lang = st.sidebar.selectbox("Language / Idioma", ["Español", "English"], key="language_selector")
 lang_code = "es" if lang == "Español" else "en"
 t = LANGUAGES[lang_code]
-
-# Reset responses
-def reset_responses(guide=None):
-    if guide == "guide1":
-        st.session_state.responses = {k: v for k, v in st.session_state.responses.items() if not k.startswith("g1_")}
-        st.session_state.guide1_complete = False
-        st.session_state.has_trauma = False
-    elif guide == "guide2":
-        st.session_state.responses = {k: v for k, v in st.session_state.responses.items() if not k.startswith("g2_")}
-        st.session_state.guide2_complete = False
-        st.session_state.guide2_page = 0
-    elif guide == "guide3":
-        st.session_state.responses = {k: v for k, v in st.session_state.responses.items() if not k.startswith("g3_")}
-        st.session_state.guide3_complete = False
-        st.session_state.guide3_page = 0
-    else:
-        st.session_state.responses = {}
-        st.session_state.guide1_complete = False
-        st.session_state.guide2_complete = False
-        st.session_state.guide3_complete = False
-        st.session_state.has_trauma = False
-        st.session_state.guide2_page = 0
-        st.session_state.guide3_page = 0
 
 # Action lock to prevent rapid clicks
 def action_lock():
@@ -328,12 +299,6 @@ def validate_responses(responses, guide_questions, is_guide1=False):
             errors.append(t["validation_error"])
     
     return errors
-
-# Pagination helper
-def paginate_questions(questions, page, questions_per_page=10):
-    start = page * questions_per_page
-    end = start + questions_per_page
-    return questions[start:end]
 
 # Main app
 st.title(t["title"])
@@ -427,47 +392,24 @@ if not st.session_state.guide1_complete:
         if response == t["yes"]:
             st.session_state.has_trauma = True
     
-    # Submit and Reset Buttons
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button(t["submit"], key="submit_guide1"):
-            if action_lock():
-                errors = validate_responses(st.session_state.responses, GUIDE1_QUESTIONS, is_guide1=True)
-                if errors:
-                    for error in errors:
-                        st.error(error)
-                else:
-                    st.session_state.guide1_complete = True
-                    st.success("Guía I completada / Guide I completed")
-    with col2:
-        if st.button(t["reset"], key="reset_guide1"):
-            if action_lock():
-                reset_responses("guide1")
-                st.rerun()
+    # Submit Button
+    if st.button(t["submit"], key="submit_guide1"):
+        if action_lock():
+            errors = validate_responses(st.session_state.responses, GUIDE1_QUESTIONS, is_guide1=True)
+            if errors:
+                for error in errors:
+                    st.error(error)
+            else:
+                st.session_state.guide1_complete = True
+                st.success("Guía I completada / Guide I completed")
 
 # Guía II: Factores de Riesgo Psicosocial (only if trauma detected)
 if st.session_state.guide1_complete and st.session_state.has_trauma and not st.session_state.guide2_complete:
     st.header(t["guide2"])
     st.markdown(f"<p class='tooltip'>{t['tooltip_guide2']}</p>", unsafe_allow_html=True)
     
-    QUESTIONS_PER_PAGE = 10
-    total_pages = (len(GUIDE2_QUESTIONS) + QUESTIONS_PER_PAGE - 1) // QUESTIONS_PER_PAGE
-    page = st.session_state.guide2_page
-    
-    # Pagination controls
-    col1, col2, col3 = st.columns([1, 3, 1])
-    with col1:
-        if page > 0 and st.button("Anterior / Previous", key="prev_guide2"):
-            st.session_state.guide2_page -= 1
-            st.rerun()
-    with col3:
-        if page < total_pages - 1 and st.button("Siguiente / Next", key="next_guide2"):
-            st.session_state.guide2_page += 1
-            st.rerun()
-    
-    # Display questions for current page
-    current_questions = paginate_questions(GUIDE2_QUESTIONS, page, QUESTIONS_PER_PAGE)
-    for q in current_questions:
+    # Display all questions
+    for q in GUIDE2_QUESTIONS:
         st.markdown(f"<div class='radio-group' role='radiogroup' aria-describedby='question-{q['id']}'><p class='question' id='question-{q['id']}' role='heading' aria-label='{q['text' if lang_code == 'es' else 'text_en']}'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
         response = st.radio(
             "", [t["always"], t["almost_always"], t["sometimes"], t["almost_never"], t["never"]], 
@@ -476,48 +418,24 @@ if st.session_state.guide1_complete and st.session_state.has_trauma and not st.s
         st.session_state.responses[q["id"]] = response
         st.markdown("</div>", unsafe_allow_html=True)
     
-    # Submit and Reset Buttons
-    if page == total_pages - 1:  # Show buttons only on last page
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button(t["submit"], key="submit_guide2"):
-                if action_lock():
-                    errors = validate_responses(st.session_state.responses, GUIDE2_QUESTIONS)
-                    if errors:
-                        for error in errors:
-                            st.error(error)
-                    else:
-                        st.session_state.guide2_complete = True
-                        st.success("Guía II completada / Guide II completed")
-        with col2:
-            if st.button(t["reset"], key="reset_guide2"):
-                if action_lock():
-                    reset_responses("guide2")
-                    st.rerun()
+    # Submit Button
+    if st.button(t["submit"], key="submit_guide2"):
+        if action_lock():
+            errors = validate_responses(st.session_state.responses, GUIDE2_QUESTIONS)
+            if errors:
+                for error in errors:
+                    st.error(error)
+            else:
+                st.session_state.guide2_complete = True
+                st.success("Guía II completada / Guide II completed")
 
 # Guía III: Entorno Organizacional Favorable (only if trauma detected)
 if st.session_state.guide2_complete and st.session_state.has_trauma and not st.session_state.guide3_complete:
     st.header(t["guide3"])
     st.markdown(f"<p class='tooltip'>{t['tooltip_guide3']}</p>", unsafe_allow_html=True)
     
-    QUESTIONS_PER_PAGE = 10
-    total_pages = (len(GUIDE3_QUESTIONS) + QUESTIONS_PER_PAGE - 1) // QUESTIONS_PER_PAGE
-    page = st.session_state.guide3_page
-    
-    # Pagination controls
-    col1, col2, col3 = st.columns([1, 3, 1])
-    with col1:
-        if page > 0 and st.button("Anterior / Previous", key="prev_guide3"):
-            st.session_state.guide3_page -= 1
-            st.rerun()
-    with col3:
-        if page < total_pages - 1 and st.button("Siguiente / Next", key="next_guide3"):
-            st.session_state.guide3_page += 1
-            st.rerun()
-    
-    # Display questions for current page
-    current_questions = paginate_questions(GUIDE3_QUESTIONS, page, QUESTIONS_PER_PAGE)
-    for q in current_questions:
+    # Display all questions
+    for q in GUIDE3_QUESTIONS:
         st.markdown(f"<div class='radio-group' role='radiogroup' aria-describedby='question-{q['id']}'><p class='question' id='question-{q['id']}' role='heading' aria-label='{q['text' if lang_code == 'es' else 'text_en']}'>{q['text' if lang_code == 'es' else 'text_en']}</p>", unsafe_allow_html=True)
         response = st.radio(
             "", [t["always"], t["almost_always"], t["sometimes"], t["almost_never"], t["never"]], 
@@ -526,24 +444,16 @@ if st.session_state.guide2_complete and st.session_state.has_trauma and not st.s
         st.session_state.responses[q["id"]] = response
         st.markdown("</div>", unsafe_allow_html=True)
     
-    # Submit and Reset Buttons
-    if page == total_pages - 1:  # Show buttons only on last page
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button(t["submit"], key="submit_guide3"):
-                if action_lock():
-                    errors = validate_responses(st.session_state.responses, GUIDE3_QUESTIONS)
-                    if errors:
-                        for error in errors:
-                            st.error(error)
-                    else:
-                        st.session_state.guide3_complete = True
-                        st.success("Guía III completada / Guide III completed")
-        with col2:
-            if st.button(t["reset"], key="reset_guide3"):
-                if action_lock():
-                    reset_responses("guide3")
-                    st.rerun()
+    # Submit Button
+    if st.button(t["submit"], key="submit_guide3"):
+        if action_lock():
+            errors = validate_responses(st.session_state.responses, GUIDE3_QUESTIONS)
+            if errors:
+                for error in errors:
+                    st.error(error)
+            else:
+                st.session_state.guide3_complete = True
+                st.success("Guía III completada / Guide III completed")
 
 # Save responses to CSV
 def save_responses():
