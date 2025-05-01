@@ -34,11 +34,10 @@ if not all([PASSWORD, SALT, LOG_FILE]):
 # Language translations (Spanish only)
 LANGUAGES = {
     "es": {
-        "title": "Encuesta NOM-035-STPS-2018",
+        "title": "Encuesta NOM-035-STPS-2018 (Guía I y II)",
         "welcome": "Bienvenido a la encuesta NOM-035. Responda todas las preguntas con honestidad para ayudarnos a mejorar su entorno laboral.",
         "guide1": "Guía I: Acontecimientos Traumáticos Severos",
         "guide2": "Guía II: Factores de Riesgo Psicosocial",
-        "guide3": "Guía III: Entorno Organizacional Favorable",
         "submit": "Enviar",
         "previous": "Anterior",
         "download_log": "Descargar Registro",
@@ -55,7 +54,6 @@ LANGUAGES = {
         "never": "Nunca",
         "tooltip_guide1": "Indique si ha experimentado estos eventos en el último año.",
         "tooltip_guide2": "Evalúe los factores de riesgo en su entorno laboral.",
-        "tooltip_guide3": "Evalúe el entorno organizacional en su lugar de trabajo.",
         "personal_info": "Información Personal",
         "traumatic_events": "Eventos Traumáticos",
         "persistent_memories": "Recuerdos Persistentes",
@@ -76,7 +74,8 @@ LANGUAGES = {
         "completed": "¡Guía completada exitosamente!",
         "file_not_found": "No hay datos en el registro.",
         "unexpected_error": "Ocurrió un error inesperado: {error}. Por favor intenta de nuevo o contacta al soporte.",
-        "debug_prompt": "Para más detalles, habilite DEBUG_MODE=True en el archivo .env y reinicie la aplicación."
+        "debug_prompt": "Para más detalles, habilite DEBUG_MODE=True en el archivo .env y reinicie la aplicación.",
+        "survey_complete": "Encuesta completada. Sus respuestas han sido guardadas."
     }
 }
 
@@ -164,35 +163,6 @@ GUIDE2_QUESTIONS = [
     {"id": "g2_q46", "text": "Mi trabajo tiene un propósito claro.", "type": "likert", "group": "work_life_balance"}
 ]
 
-GUIDE3_QUESTIONS = [
-    {"id": "g3_q1", "text": "Me informan claramente mis responsabilidades.", "type": "likert"},
-    {"id": "g3_q2", "text": "Recibo instrucciones claras para mi trabajo.", "type": "likert"},
-    {"id": "g3_q3", "text": "Mi jefe comunica lo que espera de mí.", "type": "likert"},
-    {"id": "g3_q4", "text": "Tengo los recursos necesarios para mi trabajo.", "type": "likert"},
-    {"id": "g3_q5", "text": "Tengo acceso a herramientas necesarias.", "type": "likert"},
-    {"id": "g3_q6", "text": "Recibo retroalimentación sobre mi desempeño.", "type": "likert"},
-    {"id": "g3_q7", "text": "Mi jefe reconoce mi trabajo bien hecho.", "type": "likert"},
-    {"id": "g3_q8", "text": "Me siento valorado(a) por mis contribuciones.", "type": "likert"},
-    {"id": "g3_q9", "text": "Recibo reconocimiento por mis logros.", "type": "likert"},
-    {"id": "g3_q10", "text": "Se promueve la igualdad de oportunidades.", "type": "likert"},
-    {"id": "g3_q11", "text": "Siento que se me trata con justicia.", "type": "likert"},
-    {"id": "g3_q12", "text": "Mis opiniones son tomadas en cuenta.", "type": "likert"},
-    {"id": "g3_q13", "text": "Puedo expresar mis ideas.", "type": "likert"},
-    {"id": "g3_q14", "text": "Se fomenta la participación en decisiones.", "type": "likert"},
-    {"id": "g3_q15", "text": "Siento que pertenezco a un equipo.", "type": "likert"},
-    {"id": "g3_q16", "text": "Existe respeto mutuo.", "type": "likert"},
-    {"id": "g3_q17", "text": "Mis compañeros me tratan con cortesía.", "type": "likert"},
-    {"id": "g3_q18", "text": "Se promueve la colaboración entre compañeros.", "type": "likert"},
-    {"id": "g3_q19", "text": "Hay un buen ambiente laboral.", "type": "likert"},
-    {"id": "g3_q20", "text": "Se fomenta la confianza entre empleados.", "type": "likert"},
-    {"id": "g3_q21", "text": "La empresa promueve un mejor clima laboral.", "type": "likert"},
-    {"id": "g3_q22", "text": "Recibo apoyo para balancear mi vida laboral.", "type": "likert"},
-    {"id": "g3_q23", "text": "La empresa ofrece beneficios para mi bienestar.", "type": "likert"},
-    {"id": "g3_q24", "text": "La empresa se preocupa por mi salud.", "type": "likert"},
-    {"id": "g3_q25", "text": "Se promueve el respeto a la diversidad.", "type": "likert"},
-    {"id": "g3_q26", "text": "La empresa valora mi trabajo.", "type": "likert"}
-]
-
 # Validate Questions
 def validate_questions(questions: List[Dict], guide_name: str) -> bool:
     """Validate question data structure."""
@@ -218,22 +188,21 @@ def validate_questions(questions: List[Dict], guide_name: str) -> bool:
 
 # Cache question data
 @functools.lru_cache(maxsize=1)
-def get_all_questions() -> Tuple[List[Dict], List[Dict], List[Dict]]:
+def get_all_questions() -> Tuple[List[Dict], List[Dict]]:
     """Cache and validate question data."""
     if not all(validate_questions(q, name) for q, name in [
         (GUIDE1_QUESTIONS, "Guide 1"),
-        (GUIDE2_QUESTIONS, "Guide 2"),
-        (GUIDE3_QUESTIONS, "Guide 3")
+        (GUIDE2_QUESTIONS, "Guide 2")
     ]):
         logger.error("Question validation failed. Application cannot proceed.")
         st.error("Critical error: Invalid question data. Please contact support.")
         raise ValueError("Invalid question data")
-    return GUIDE1_QUESTIONS, GUIDE2_QUESTIONS, GUIDE3_QUESTIONS
+    return GUIDE1_QUESTIONS, GUIDE2_QUESTIONS
 
-# Valid responses for Guides 2 and 3
+# Valid responses for Guide 2
 @functools.lru_cache(maxsize=1)
 def get_valid_responses() -> List[str]:
-    """Return valid response options for Guides 2 and 3."""
+    """Return valid response options for Guide 2."""
     return [
         LANGUAGES["es"]["always"],
         LANGUAGES["es"]["almost_always"],
@@ -252,7 +221,7 @@ def hash_password(password: str, salt: str) -> str:
         return hashlib.sha256(salted_password.encode()).hexdigest()
     except Exception as e:
         logger.error(f"Error hashing password: {str(e)}")
-        raise
+ raised
 
 CORRECT_PASSWORD_HASH = hash_password(PASSWORD, SALT)
 
@@ -271,8 +240,7 @@ def initialize_log() -> None:
                 ["timestamp"] +
                 [subfield["id"] for q in GUIDE1_QUESTIONS if q["type"] == "text_group" for subfield in q["subfields"]] +
                 [q["id"] for q in GUIDE1_QUESTIONS if q["type"] != "text_group"] +
-                [q["id"] for q in GUIDE2_QUESTIONS] +
-                [q["id"] for q in GUIDE3_QUESTIONS]
+                [q["id"] for q in GUIDE2_QUESTIONS]
             )
             pd.DataFrame(columns=headers).to_csv(log_path, index=False)
             logger.info("Log file initialized successfully.")
@@ -332,10 +300,9 @@ def initialize_session_state() -> None:
                 "responses": {},
                 "guide1_complete": False,
                 "guide2_complete": False,
-                "guide3_complete": False,
-                "has_trauma": False,
+                "all_trauma_yes": False,
                 "last_action_time": 0,
-                "validation_errors": {"guide1": {}, "guide2": {}, "guide3": {}},
+                "validation_errors": {"guide1": {}, "guide2": {}},
                 "current_step": 1,
                 "initialized": True,
                 "session_id": str(uuid.uuid4())
@@ -349,7 +316,7 @@ def initialize_session_state() -> None:
                         response_defaults[subfield["id"]] = ""
                 else:
                     response_defaults[q["id"]] = None if q["type"] in ["select", "yes_no"] else 0
-            for q in GUIDE2_QUESTIONS + GUIDE3_QUESTIONS:
+            for q in GUIDE2_QUESTIONS:
                 response_defaults[q["id"]] = None
             
             defaults["responses"].update(response_defaults)
@@ -357,25 +324,24 @@ def initialize_session_state() -> None:
             for key, value in defaults.items():
                 st.session_state[key] = st.session_state.get(key, value)
             
-            # Check for trauma based on existing responses
-            update_trauma_status(st.session_state.responses, LANGUAGES["es"])
             logger.info(f"Session state initialized with session_id: {st.session_state.session_id}")
     except Exception as e:
         logger.error(f"Error initializing session state: {str(e)}")
         st.error(f"Failed to initialize application: {str(e)}")
 
-def update_trauma_status(responses: Dict, t: Dict) -> None:
-    """Update has_trauma based on Guide I responses."""
+def check_all_trauma_yes(responses: Dict, t: Dict) -> bool:
+    """Check if all trauma-related questions in Guide I are answered 'Sí'."""
     try:
         trauma_questions = [q["id"] for q in GUIDE1_QUESTIONS if q["type"] == "yes_no"]
-        st.session_state.has_trauma = any(responses.get(qid) == t["yes"] for qid in trauma_questions)
-        logger.debug(f"Trauma status updated: has_trauma={st.session_state.has_trauma}")
+        all_yes = all(responses.get(qid) == t["yes"] for qid in trauma_questions)
+        logger.debug(f"Checked trauma questions: all_yes={all_yes}")
+        return all_yes
     except Exception as e:
-        logger.error(f"Error updating trauma status: {str(e)}")
-        st.error("Failed to update trauma status.")
+        logger.error(f"Error checking trauma responses: {str(e)}")
+        return False
 
 # Streamlit Configuration
-st.set_page_config(page_title="NOM-035 Survey", layout="wide")
+st.set_page_config(page_title="NOM-035 Survey (Guía I y II)", layout="wide")
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -642,16 +608,16 @@ def calculate_progress() -> float:
             sum(1 for q in GUIDE1_QUESTIONS if q["type"] != "text_group") +
             sum(1 for subfield in GUIDE1_QUESTIONS[0]["subfields"] if not subfield.get("optional", False))
         )
-        if st.session_state.has_trauma:
-            total_questions += len(GUIDE2_QUESTIONS) + len(GUIDE3_QUESTIONS)
+        if st.session_state.all_trauma_yes:
+            total_questions += len(GUIDE2_QUESTIONS)
         
         answered_questions = 0
         required_keys = (
             [subfield["id"] for q in GUIDE1_QUESTIONS if q["type"] == "text_group" for subfield in q["subfields"] if not subfield.get("optional", False)] +
             [q["id"] for q in GUIDE1_QUESTIONS if q["type"] != "text_group"]
         )
-        if st.session_state.has_trauma:
-            required_keys += [q["id"] for q in GUIDE2_QUESTIONS] + [q["id"] for q in GUIDE3_QUESTIONS]
+        if st.session_state.all_trauma_yes:
+            required_keys += [q["id"] for q in GUIDE2_QUESTIONS]
         
         for key in required_keys:
             value = st.session_state.responses.get(key)
@@ -792,8 +758,6 @@ def render_question(q: Dict, t: Dict, guide_id: str) -> None:
                 disabled=st.session_state.get(f"{guide_id}_complete", False)
             )
             st.session_state.responses[q["id"]] = response
-            if response == t["yes"]:
-                update_trauma_status(st.session_state.responses, t)
             if is_invalid:
                 st.markdown(f'<p class="error-message">{st.session_state.validation_errors[guide_id][q["id"]]}</p>', unsafe_allow_html=True)
         elif q["type"] == "likert":
@@ -861,15 +825,18 @@ def main():
                                     st.error(error)
                             else:
                                 st.session_state.guide1_complete = True
-                                if not st.session_state.has_trauma:
+                                if check_all_trauma_yes(st.session_state.responses, t):
+                                    st.session_state.all_trauma_yes = True
+                                    st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
+                                else:
                                     save_responses_to_log(st.session_state.responses)
-                                st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
+                                    st.markdown(f'<p class="success-message">{t["survey_complete"]}</p>', unsafe_allow_html=True)
                         except Exception as e:
                             logger.error(f"Error submitting Guide 1: {str(e)}")
                             st.error(f"{t['unexpected_error'].format(error='Guide 1 submission failed')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Guide 1 submission failed"))
 
         # Guide II
-        elif st.session_state.guide1_complete and st.session_state.has_trauma and not st.session_state.guide2_complete:
+        elif st.session_state.guide1_complete and st.session_state.all_trauma_yes and not st.session_state.guide2_complete:
             st.markdown(f'<h2 class="header">{t["guide2"]}</h2>', unsafe_allow_html=True)
             st.markdown(f'<p class="tooltip">{t["tooltip_guide2"]}</p>', unsafe_allow_html=True)
 
@@ -893,6 +860,7 @@ def main():
                 if st.button(t["previous"], key="prev_guide2", type="secondary"):
                     if action_lock():
                         st.session_state.guide1_complete = False
+                        st.session_state.all_trauma_yes = False
                         st.session_state.validation_errors["guide1"] = {}
             with col2:
                 if st.button(t["submit"], key="submit_guide2"):
@@ -904,42 +872,11 @@ def main():
                                     st.error(error)
                             else:
                                 st.session_state.guide2_complete = True
-                                st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
+                                save_responses_to_log(st.session_state.responses)
+                                st.markdown(f'<p class="success-message">{t["survey_complete"]}</p>', unsafe_allow_html=True)
                         except Exception as e:
                             logger.error(f"Error submitting Guide 2: {str(e)}")
                             st.error(f"{t['unexpected_error'].format(error='Guide 2 submission failed')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Guide 2 submission failed"))
-
-        # Guide III
-        elif st.session_state.guide2_complete and st.session_state.has_trauma and not st.session_state.guide3_complete:
-            st.markdown(f'<h2 class="header">{t["guide3"]}</h2>', unsafe_allow_html=True)
-            st.markdown(f'<p class="tooltip">{t["tooltip_guide3"]}</p>', unsafe_allow_html=True)
-
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            for q in GUIDE3_QUESTIONS:
-                render_question(q, t, "guide3")
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                if st.button(t["previous"], key="prev_guide3", type="secondary"):
-                    if action_lock():
-                        st.session_state.guide2_complete = False
-                        st.session_state.validation_errors["guide2"] = {}
-            with col2:
-                if st.button(t["submit"], key="submit_guide3"):
-                    if action_lock():
-                        try:
-                            errors = validate_responses(st.session_state.responses, GUIDE3_QUESTIONS, "guide3")
-                            if errors:
-                                for error in errors.values():
-                                    st.error(error)
-                            else:
-                                st.session_state.guide3_complete = True
-                                save_responses_to_log(st.session_state.responses)
-                                st.markdown(f'<p class="success-message">{t["completed"]}</p>', unsafe_allow_html=True)
-                        except Exception as e:
-                            logger.error(f"Error submitting Guide 3: {str(e)}")
-                            st.error(f"{t['unexpected_error'].format(error='Guide 3 submission failed')} {t['debug_prompt']}" if DEBUG_MODE else t["unexpected_error"].format(error="Guide 3 submission failed"))
 
         st.markdown('</div>', unsafe_allow_html=True)
     except Exception as e:
